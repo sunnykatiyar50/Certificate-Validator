@@ -1,85 +1,40 @@
 # Certificate Validator
 
-A Node.js web application with a user interface for validating X.509 certificates.
+A small web app for validating X.509 certificates. Upload a certificate file (PEM, CRT, CER, DER, PFX/P12) or paste certificate text, and see its validity, subject/issuer, serial number, fingerprints, key usage, SANs, and more.
 
-## Features
-
-- Upload and validate X.509 certificates (.pem, .crt, .cer, .der formats)
-- View certificate details (subject, issuer, validity dates, serial number, thumbprint)
-- Check if a certificate is valid or expired
-- Clean and responsive user interface
+- `backend/` — Express server that parses and validates certificates (`server.js`)
+- `public/` — static frontend (HTML/CSS/JS) served by the backend
 
 ## Prerequisites
 
-- Node.js (v12 or higher)
-- npm (v6 or higher)
+- [Node.js](https://nodejs.org/) (includes npm)
 
-## Installation
+## Start
 
-1. Clone this repository:
-   ```
-   git clone <repository-url>
-   cd "Certificate Validator"
-   ```
-
-2. Install dependencies:
-   ```
-   npm install
-   ```
-
-3. (Optional) Set the port in a `.env` file (default is 3335):
-   ```
-   PORT=3335
-   ```
-
-## Usage
-
-1. Start the application:
-   ```
-   npm start
-   ```
-
-2. Open your browser and navigate to:
-   ```
-   http://localhost:3335
-   ```
-   (or the port you set in `.env`)
-
-3. Upload a certificate file or paste certificate text using the form and click "Validate Certificate".
-
-4. View the validation results and certificate details.
-
-## Supported Certificate Formats
-
-- PEM (.pem)
-- X.509 (.crt, .cer)
-- DER (.der)
-
-## Project Structure
-
-```
-Certificate Validator/
-├── index.js              # Main server file
-├── package.json          # Project configuration
-├── public/               # Static files
-│   ├── css/              # CSS stylesheets
-│   │   └── style.css     # Main stylesheet
-│   └── js/               # Client-side JavaScript
-│       └── main.js       # Main JavaScript file
-├── views/                # EJS templates
-│   └── index.ejs         # Main view template
-├── uploads/              # Temporary storage for uploaded certificates
-└── .env                  # Environment variables (optional)
+```bash
+cd backend
+npm install
+npm start
 ```
 
-## Technologies Used
+The app runs at [http://localhost:3003](http://localhost:3003) — the backend also serves the frontend from `public/`, so there's nothing else to start.
 
-- Node.js - Server-side JavaScript runtime
-- Express.js - Web application framework
-- EJS - Templating engine
-- Multer - Middleware for handling file uploads
-- Node-forge - Library for working with certificates
+For development with auto-restart on file changes:
 
-## License
+```bash
+npm run dev
+```
 
-ISC
+## Stop
+
+Press `Ctrl+C` in the terminal running the server.
+
+If it's running in the background and you need to force-stop it:
+
+```bash
+# Windows
+taskkill /F /IM node.exe
+
+# macOS/Linux
+pkill -f "node server.js"
+```
