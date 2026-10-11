@@ -14,9 +14,23 @@ const APP_VERSION = process.env.APP_VERSION || PACKAGE_VERSION;
 const MAX_UPLOAD_BYTES = 1024 * 1024; // 1 MB is far more than any certificate or PFX bundle needs
 const ALLOWED_EXTENSIONS = new Set(['.pem', '.crt', '.cer', '.der', '.pfx', '.p12']);
 
+// Express treats a "trust proxy" string as a list of IPs/subnets, so values from an environment
+// variable must be converted: "1" is a hop count, "true"/"false" are booleans, anything else
+// (e.g. "loopback, 10.0.0.0/8") is passed through as an address list.
+function parseTrustProxy(value) {
+  if (value === undefined || value === null) return undefined;
+  const v = String(value).trim();
+  if (v === '') return undefined;
+  if (/^(true|yes|on)$/i.test(v)) return true;
+  if (/^(false|no|off)$/i.test(v)) return false;
+  if (/^[0-9]+$/.test(v)) return Number(v);
+  return v;
+}
+
 function createApp({ allowPrivateHosts = false, enableRateLimit = true, corsOrigin = process.env.CORS_ORIGIN } = {}) {
   const app = express();
-  if (process.env.TRUST_PROXY) app.set('trust proxy', process.env.TRUST_PROXY);
+  const trustProxy = parseTrustProxy(process.env.TRUST_PROXY);
+  if (trustProxy !== undefined) app.set('trust proxy', trustProxy);
 
   // The frontend is served from the same origin, so CORS stays off unless explicitly configured.
   if (corsOrigin) app.use(cors({ origin: corsOrigin.split(',') }));
@@ -112,4 +126,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { createApp };
+module.exports = { createApp, parseTrustProxy };
