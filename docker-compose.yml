@@ -1,0 +1,25 @@
+# Run the published image:        APP_VERSION=1.2.3 docker compose up -d
+# Build from source and run it:   docker compose up -d --build
+#
+# APP_VERSION selects the image tag and is stamped into the build. It defaults to "latest".
+# Find the current version with: node scripts/release.js --show
+services:
+  certificate-validator:
+    image: ghcr.io/sunnykatiyar50/certificate-validator:${APP_VERSION:-latest}
+    build:
+      context: .
+      args:
+        VERSION: ${APP_VERSION:-}
+        REVISION: ${GIT_SHA:-}
+    ports:
+      - "${HOST_PORT:-3003}:3003"
+    environment:
+      # Set to 1 when running behind a reverse proxy so rate limiting sees client IPs.
+      TRUST_PROXY: ${TRUST_PROXY:-}
+      CORS_ORIGIN: ${CORS_ORIGIN:-}
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
