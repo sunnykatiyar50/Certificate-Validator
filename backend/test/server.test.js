@@ -181,3 +181,72 @@ test('health and version endpoints', async t => {
   const { version } = await (await fetch(`${base}/api/version`)).json();
   assert.equal(version, require('../package.json').version);
 });
+
+test('key pair generation endpoint', async t => {
+  const { server, base } = await listen(createApp({ enableRateLimit: false }));
+  t.after(() => close(server));
+  const crypto = require('node:crypto');
+  const generate = body => fetch(`${base}/api/generate-keypair`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  }).then(async res => ({ res, body: await res.json() }));
+
+  const { algorithms } = await (await fetch(`${base}/api/algorithms`)).json();
+  assert.deepEqual(algorithms.map(a => a.id), ['RSA-2048', 'RSA-3072', 'RSA-4096', 'ECDSA-P256', 'ECDSA-P384', 'ECDSA-P521', 'Ed25519']);
+
+  for (const { id } of algorithms) {
+    await t.test(`${id}: certificate matches its private key and validates`, async () => {
+      const { res, body } = await generate({ algorithm: id, commonName: 'gen.test', sans: 'alt.test 10.1.2.3', validityDays: 30 });
+      assert.equal(res.status, 200);
+      assert.equal(res.headers.get('cache-control'), 'no-store');
+      const cert = new crypto.X509Certificate(body.certificatePem);
+      assert.ok(cert.verify(cert.publicKey), 'self-signature verifies');
+      assert.ok(crypto.createPublicKey(crypto.createPrivateKey(body.privateKeyPem)).equals(cert.publicKey), 'key pair matches');
+      assert.ok(crypto.createPublicKey(body.publicKeyPem).equals(cert.publicKey), 'exported public key matches');
+      assert.match(cert.subjectAltName, /DNS:alt\.test/);
+      assert.match(cert.subjectAltName, /IP Address:10\.1\.2\.3/);
+      assert.equal(cert.ca, false);
+      assert.match(body.fingerprintSha256, /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/);
+
+      // The generated certificate round-trips through the validator.
+      const validated = await postText(base, body.certificatePem, { hostname: 'alt.test' });
+      assert.equal(validated.body.error, null);
+      assert.equal(validated.body.certs[0].valid, true);
+      assert.equal(validated.body.hostnameCheck.matches, true);
+    });
+  }
+
+  await t.test('uses the common name as a SAN when none are given, and honours hash and CA options', async () => {
+    const { body } = await generate({ algorithm: 'ECDSA-P384', commonName: 'solo.test', hash: 'SHA-512', isCA: true, organization: 'Acme, Inc.', country: 'us' });
+    const cert = new crypto.X509Certificate(body.certificatePem);
+    assert.match(cert.subjectAltName, /DNS:solo\.test/);
+    assert.equal(cert.ca, true);
+    assert.match(cert.subject, /O=Acme\\, Inc\./); // Node escapes the comma in its string form
+    assert.match(cert.subject, /C=US/);
+    assert.equal(body.hash, 'SHA-512');
+  });
+
+  await t.test('generates a CSR or bare keys', async () => {
+    const csr = await generate({ algorithm: 'RSA-2048', commonName: 'csr.test', output: 'csr' });
+    assert.match(csr.body.csrPem, /BEGIN CERTIFICATE REQUEST/);
+    assert.equal(csr.body.certificatePem, null);
+    const keys = await generate({ algorithm: 'Ed25519', output: 'keys' });
+    assert.equal(keys.body.certificatePem, null);
+    assert.match(keys.body.privateKeyPem, /BEGIN PRIVATE KEY/);
+  });
+
+  await t.test('rejects invalid input', async () => {
+    for (const bad of [
+      { algorithm: 'DSA', commonName: 'x.test' },
+      { algorithm: 'RSA-2048', commonName: '' },
+      { algorithm: 'RSA-2048', commonName: 'x.test', validityDays: 99999 },
+      { algorithm: 'RSA-2048', commonName: 'x.test', hash: 'MD5' },
+      { algorithm: 'RSA-2048', commonName: 'x.test', sans: 'not a host!!' },
+      { algorithm: 'RSA-2048', commonName: 'x.test', country: 'USA' },
+      { algorithm: 'RSA-2048', commonName: 'x'.repeat(65) }
+    ]) {
+      const { res, body } = await generate(bad);
+      assert.equal(res.status, 400, JSON.stringify(bad));
+      assert.ok(body.error);
+    }
+  });
+});

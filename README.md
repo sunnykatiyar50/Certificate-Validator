@@ -1,8 +1,23 @@
 # Certificate Validator
 
-A small web app for validating X.509 certificates. Upload a certificate file (PEM, CRT, CER, DER, PFX/P12) or paste certificate text, and see its validity, subject/issuer, serial number, fingerprints, key usage, SANs, and more.
+A small web app for validating X.509 certificates and generating key pairs.
 
-- `backend/` — Express server that parses and validates certificates (`server.js`)
+**Validate**
+- **Upload or paste** a certificate (PEM, CRT, CER, DER, PFX/P12) and see validity, subject/issuer, serial number, fingerprints, key usage, SANs and more.
+- **Chain verification:** include intermediates and roots to check each signature, see where the chain ends, and whether it reaches a root in the Mozilla CA store.
+- **Hostname match:** enter a hostname to check it against the certificate's SANs (wildcards included).
+- **Live site check:** enter `example.com` (and optionally a port) and the server fetches the certificate chain it presents, plus the TLS version and cipher.
+- **Warnings:** weak RSA keys, SHA-1/MD5 signatures, certificates expiring within 30 days, self-signed leaves, and validity periods over 398 days.
+
+**Create**
+- **Generate keys:** create a key pair with a self-signed certificate, a CSR, or keys only. Supports RSA 2048/3072/4096, ECDSA P-256/P-384/P-521 and Ed25519, with SHA-256/384/512, SANs, subject fields, validity and a CA option. Results can be copied, downloaded as PEM, or sent straight to the validator.
+- **History:** generated key pairs are saved under a name (rename or delete any time). History is stored only in your browser's local storage, unencrypted, and you choose whether the private key is included. The server never stores generated keys.
+
+Not covered yet: revocation (CRL/OCSP).
+
+- `backend/server.js` — Express app and API routes
+- `backend/lib/` — certificate parsing (`certificate.js`), chain/hostname analysis (`analysis.js`), live TLS fetch with SSRF protection (`liveCheck.js`), key generation (`keygen.js`)
+- `backend/test/` — tests (`npm test`)
 - `public/` — static frontend (HTML/CSS/JS) served by the backend
 
 ## Prerequisites

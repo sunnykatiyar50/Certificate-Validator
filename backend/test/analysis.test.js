@@ -96,3 +96,11 @@ test('daysRemaining is negative for expired certificates', async () => {
   const { certs } = analyzeChain([expired.der]);
   assert.ok(certs[0].daysRemaining < 0);
 });
+
+test('a self-signed leaf without keyCertSign is recognised as self-signed', async () => {
+  const { generateKeyPair } = require('../lib/keygen');
+  const keypair = await generateKeyPair({ algorithm: 'ECDSA-P256', commonName: 'self.test' });
+  const { certs, chain } = analyzeChain([new X509Certificate(keypair.certificatePem).raw]);
+  assert.equal(certs[0].selfSigned, true);
+  assert.equal(chain.status, 'untrusted-root');
+});

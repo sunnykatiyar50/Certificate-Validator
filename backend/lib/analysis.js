@@ -63,8 +63,10 @@ function commonName(cert) {
   return m ? m[1] : cert.subject.replace(/\n/g, ', ');
 }
 
+// Same subject and issuer and a signature that verifies with its own key. checkIssued() is not used here
+// because it rejects issuers without the keyCertSign usage, which self-signed leaf certificates lack.
 function isSelfSigned(cert) {
-  return cert.checkIssued(cert) && safeVerify(cert, cert);
+  return cert.subject === cert.issuer && safeVerify(cert, cert);
 }
 
 function collectWarnings(cert, der, daysRemaining, selfSigned) {

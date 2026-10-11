@@ -5,6 +5,7 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const { parseCertificateInput, buildReport, wrapDer } = require('./lib/certificate');
 const { fetchServerChain, LiveCheckError } = require('./lib/liveCheck');
+const { generateKeyPair, listAlgorithms, KeygenError } = require('./lib/keygen');
 const { version: PACKAGE_VERSION } = require('./package.json');
 
 // package.json is the single source of truth for the version; images are tagged from it.
@@ -66,6 +67,20 @@ function createApp({ allowPrivateHosts = false, enableRateLimit = true, corsOrig
     } catch (err) {
       const status = err instanceof LiveCheckError ? 400 : 500;
       res.status(status).json({ certs: [], error: err instanceof LiveCheckError ? err.message : 'Live check failed.' });
+    }
+  });
+
+  app.get('/api/algorithms', (req, res) => res.json({ algorithms: listAlgorithms() }));
+
+  // Generated private keys are returned once in the response and never stored or logged by the server.
+  app.post('/api/generate-keypair', limiter(20, 'Too many key generation requests, please try again in a minute.'), async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    try {
+      res.json(await generateKeyPair(req.body || {}));
+    } catch (err) {
+      if (err instanceof KeygenError) return res.status(400).json({ error: err.message });
+      console.error('Key generation failed:', err.message);
+      res.status(500).json({ error: 'Key generation failed.' });
     }
   });
 
