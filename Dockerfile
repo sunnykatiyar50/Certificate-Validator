@@ -17,7 +17,7 @@ LABEL org.opencontainers.image.title="Certificate Validator" \
       org.opencontainers.image.revision="${REVISION}"
 
 ENV NODE_ENV=production \
-    PORT=30002 \
+    PORT=33003 \
     APP_VERSION=${VERSION}
 
 WORKDIR /app
@@ -27,7 +27,7 @@ COPY lib lib
 COPY public public
 
 USER node
-EXPOSE 30002
+EXPOSE 33003
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"

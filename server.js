@@ -106,7 +106,7 @@ function createApp({ allowPrivateHosts = false, enableRateLimit = true, corsOrig
 }
 
 if (require.main === module) {
-  const PORT = process.env.PORT || 30002;
+  const PORT = process.env.PORT || 33003;
   createApp({ allowPrivateHosts: process.env.ALLOW_PRIVATE_HOSTS === '1' }).listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
