@@ -107,7 +107,7 @@ h2 {
 #version { color: #6f7d90; }
 
 .main {
-  padding: 22px 24px 40px;
+  padding: 32px 40px 56px;
   min-width: 0;
 }
 
@@ -115,9 +115,11 @@ h2 {
 
 .view {
   display: none;
-  grid-template-columns: minmax(300px, 390px) minmax(0, 1fr);
-  gap: 20px;
+  grid-template-columns: minmax(340px, 440px) minmax(0, 1fr);
+  gap: 28px;
   align-items: start;
+  max-width: 1680px;
+  margin: 0 auto;
 }
 .view.active { display: grid; }
 
@@ -128,11 +130,14 @@ h2 {
 }
 
 .card {
-  padding: 18px;
+  padding: 22px 22px 24px;
 }
+/* Sticky, but never taller than the window: a tall form scrolls inside itself so its last fields stay reachable. */
 .input {
   position: sticky;
-  top: 22px;
+  top: 32px;
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
 }
 
 .card-head {
@@ -164,7 +169,7 @@ h2 {
 .form {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 label {
@@ -251,8 +256,8 @@ summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; }
 /* ---------- results ---------- */
 
 .panel {
-  padding: 10px 14px;
-  margin-bottom: 14px;
+  padding: 12px 18px;
+  margin-bottom: 18px;
   font-size: 0.92rem;
 }
 .panel.error { border-color: #f0c4c0; background: #fff6f5; }
@@ -260,9 +265,10 @@ summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; }
 .muted { color: var(--muted); font-size: 0.92em; }
 
 .cert {
-  padding: 14px 16px;
-  margin-bottom: 14px;
+  padding: 18px 22px 20px;
+  margin-bottom: 18px;
   font-size: 0.9rem;
+  container-type: inline-size;
 }
 .cert-header {
   display: flex;
@@ -335,7 +341,20 @@ summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; }
 
 /* ---------- generated keys ---------- */
 
-.pem-list { margin-top: 14px; display: flex; flex-direction: column; gap: 12px; }
+.pem-list {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+/* Certificate detail sections: one column when narrow, two balanced columns when the card is wide. */
+.sections { margin-top: 4px; }
+.section { break-inside: avoid; margin-bottom: 4px; }
+@container (min-width: 800px) {
+  .sections { column-count: 2; column-gap: 44px; }
+}
 .pem-block { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .pem-block.secret { border-color: #f0c4c0; }
 .pem-head {
@@ -385,7 +404,8 @@ summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; }
 /* ---------- narrower screens ---------- */
 
 @media (max-width: 1100px) {
-  .view { grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); }
+  .main { padding: 24px 24px 40px; }
+  .view { grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); gap: 20px; }
   .details { grid-template-columns: 130px minmax(0, 1fr); }
 }
 
@@ -402,9 +422,10 @@ summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; }
   .nav-group, .sidebar-foot p { display: none; }
   .nav-item { width: auto; gap: 8px; padding: 7px 12px; }
   .sidebar-foot { margin-top: 6px; }
-  .main { padding: 14px; }
+  .main { padding: 16px; }
   .view { grid-template-columns: minmax(0, 1fr); }
-  .input { position: static; }
+  .input { position: static; max-height: none; overflow: visible; }
+  .pem-list { grid-template-columns: minmax(0, 1fr); }
   .history-list { max-height: 260px; }
 }
 
