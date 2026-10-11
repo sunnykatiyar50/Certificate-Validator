@@ -41,7 +41,7 @@ npm install
 npm start
 ```
 
-The app runs at [http://localhost:3003](http://localhost:3003). The server also serves the frontend from `public/`, so there is nothing else to start.
+The app runs at [http://localhost:30002](http://localhost:30002). The server also serves the frontend from `public/`, so there is nothing else to start.
 
 For development with auto-restart on file changes:
 
@@ -80,9 +80,9 @@ $env:APP_VERSION = "1.1.1"; docker compose up -d
 Remove-Item Env:APP_VERSION   # clear it afterwards
 ```
 
-You can also put `APP_VERSION=1.1.1` in a `.env` file next to `docker-compose.yml`. Then plain `docker compose up -d` is enough.
+You can also keep the settings in a `.env` file next to `docker-compose.yml`: copy `sample.env` to `.env` and edit it (for example `APP_VERSION=1.1.1`). Then plain `docker compose up -d` is enough. The container is named `cert-validator`, so you can use `docker logs cert-validator` and `docker stop cert-validator`.
 
-The app is then at [http://localhost:3003](http://localhost:3003). Compose settings (all optional): `APP_VERSION`, `HOST_PORT` (default `3003`), `TRUST_PROXY`, `CORS_ORIGIN`. The container runs as a non-root user with a read-only filesystem and has a `/healthz` health check.
+The app is then at [http://localhost:30002](http://localhost:30002). Compose settings (all optional): `APP_VERSION`, `HOST_PORT` (default `30002`), `TRUST_PROXY`, `CORS_ORIGIN`. The container runs as a non-root user with a read-only filesystem and has a `/healthz` health check.
 
 If pulling the image is denied, the package is still private: make it public in the repository's Packages settings, or run `docker login ghcr.io`.
 
@@ -90,7 +90,7 @@ If pulling the image is denied, the package is still private: make it public in 
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `PORT` | `3003` | Port to listen on |
+| `PORT` | `30002` | Port to listen on |
 | `CORS_ORIGIN` | unset (CORS off) | Comma-separated origins allowed to call the API cross-origin |
 | `TRUST_PROXY` | unset | Set (e.g. `1`) when behind a reverse proxy so rate limiting sees client IPs |
 | `ALLOW_PRIVATE_HOSTS` | unset | Set to `1` to let live checks reach private/loopback addresses (local use only) |
