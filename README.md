@@ -15,10 +15,10 @@ A small web app for validating X.509 certificates and generating key pairs.
 
 Not covered yet: revocation (CRL/OCSP).
 
-- `backend/server.js` — Express app and API routes
-- `backend/lib/` — certificate parsing (`certificate.js`), chain/hostname analysis (`analysis.js`), live TLS fetch with SSRF protection (`liveCheck.js`), key generation (`keygen.js`)
-- `backend/test/` — tests (`npm test`)
-- `public/` — static frontend (HTML/CSS/JS) served by the backend
+- `server.js` — Express app and API routes
+- `lib/` — certificate parsing (`certificate.js`), chain/hostname analysis (`analysis.js`), live TLS fetch with SSRF protection (`liveCheck.js`), key generation (`keygen.js`)
+- `test/` — tests (`npm test`)
+- `public/` — static frontend (HTML/CSS/JS) served by the server
 
 ## Prerequisites
 
@@ -27,12 +27,11 @@ Not covered yet: revocation (CRL/OCSP).
 ## Start
 
 ```bash
-cd backend
 npm install
 npm start
 ```
 
-The app runs at [http://localhost:3003](http://localhost:3003) — the backend also serves the frontend from `public/`, so there's nothing else to start.
+The app runs at [http://localhost:3003](http://localhost:3003) — the server also serves the frontend from `public/`, so there's nothing else to start.
 
 For development with auto-restart on file changes:
 
@@ -54,7 +53,6 @@ Uploads are limited to 1 MB and the extensions above, are processed in memory, a
 ## Tests
 
 ```bash
-cd backend
 npm test
 ```
 
@@ -69,7 +67,7 @@ Compose settings (all optional): `APP_VERSION` (image tag, default `latest`), `H
 
 ## Versioning and releases
 
-The version lives in one place: `backend/package.json`. It is shown in the app footer and at `/api/version`, and it tags the Docker images.
+The version lives in one place: `package.json`. It is shown in the app footer and at `/api/version`, and it tags the Docker images.
 
 ```bash
 node scripts/release.js --show     # print the current version

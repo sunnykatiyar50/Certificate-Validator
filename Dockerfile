@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1
 
 FROM node:22-alpine AS deps
-WORKDIR /app/backend
-COPY backend/package.json backend/package-lock.json ./
+WORKDIR /app
+COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 FROM node:22-alpine
-# Set by CI from backend/package.json (see scripts/release.js). Empty means "use package.json".
+# Set by CI from package.json (see scripts/release.js). Empty means "use package.json".
 ARG VERSION=""
 ARG REVISION=""
 
@@ -20,14 +20,12 @@ ENV NODE_ENV=production \
     PORT=3003 \
     APP_VERSION=${VERSION}
 
-# server.js serves ../public, so keep the backend/ + public/ layout.
 WORKDIR /app
-COPY --from=deps /app/backend/node_modules backend/node_modules
-COPY backend/package.json backend/server.js backend/
-COPY backend/lib backend/lib
+COPY --from=deps /app/node_modules node_modules
+COPY package.json server.js ./
+COPY lib lib
 COPY public public
 
-WORKDIR /app/backend
 USER node
 EXPOSE 3003
 

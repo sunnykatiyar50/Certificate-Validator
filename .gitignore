@@ -1,7 +1,4 @@
 node_modules/
-backend/uploads/*
-!backend/uploads/.gitkeep
-
 npm-debug.log*
 *.log
 
@@ -12,3 +9,4 @@ npm-debug.log*
 Thumbs.db
 
 *.swp
+*.zip

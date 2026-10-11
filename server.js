@@ -20,7 +20,7 @@ function createApp({ allowPrivateHosts = false, enableRateLimit = true, corsOrig
 
   // The frontend is served from the same origin, so CORS stays off unless explicitly configured.
   if (corsOrigin) app.use(cors({ origin: corsOrigin.split(',') }));
-  app.use(express.static(path.join(__dirname, '../public')));
+  app.use(express.static(path.join(__dirname, 'public')));
   app.use(express.json({ limit: '1mb' }));
 
   app.get('/healthz', (req, res) => res.json({ status: 'ok' }));

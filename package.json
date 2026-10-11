@@ -1,5 +1,5 @@
 {
-  "name": "certificate-validator-backend",
+  "name": "certificate-validator",
   "version": "1.1.0",
   "main": "server.js",
   "scripts": {
