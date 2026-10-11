@@ -92,7 +92,7 @@ If pulling the image is denied, the package is still private: make it public in 
 | --- | --- | --- |
 | `PORT` | `33003` | Port to listen on |
 | `CORS_ORIGIN` | unset (CORS off) | Comma-separated origins allowed to call the API cross-origin |
-| `TRUST_PROXY` | unset | Set (e.g. `1`) when behind a reverse proxy so rate limiting sees client IPs |
+| `TRUST_PROXY` | unset | Set when behind a reverse proxy so rate limiting sees client IPs. Use the number of proxy hops (`1` for a single proxy), or a comma-separated list of proxy IPs/subnets (`loopback, 172.16.0.0/12`). `true` trusts every hop and lets clients spoof their IP, so prefer a number or a list. |
 | `ALLOW_PRIVATE_HOSTS` | unset | Set to `1` to let live checks reach private/loopback addresses (local use only) |
 | `APP_VERSION` | from `package.json` | Version shown in the app; set by the Docker build |
 

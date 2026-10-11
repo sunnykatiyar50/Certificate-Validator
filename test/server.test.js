@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const tls = require('node:tls');
-const { createApp } = require('../server');
+const { createApp, parseTrustProxy } = require('../server');
 const { isBlockedAddress } = require('../lib/liveCheck');
 const { DAY, createCert, privateKeyPem } = require('./helpers');
 
@@ -249,4 +249,26 @@ test('key pair generation endpoint', async t => {
       assert.ok(body.error);
     }
   });
+});
+
+test('TRUST_PROXY values are converted for Express', () => {
+  assert.equal(parseTrustProxy(undefined), undefined);
+  assert.equal(parseTrustProxy(''), undefined);
+  assert.equal(parseTrustProxy('1'), 1);
+  assert.equal(parseTrustProxy(' 2 '), 2);
+  assert.equal(parseTrustProxy('true'), true);
+  assert.equal(parseTrustProxy('TRUE'), true);
+  assert.equal(parseTrustProxy('false'), false);
+  assert.equal(parseTrustProxy('loopback, 10.0.0.0/8'), 'loopback, 10.0.0.0/8');
+
+  // Every supported form must produce an app without throwing (the old code crashed on "true" and "1").
+  const original = process.env.TRUST_PROXY;
+  try {
+    for (const value of ['true', '1', 'false', 'loopback, 172.16.0.0/12', '10.0.0.1']) {
+      process.env.TRUST_PROXY = value;
+      assert.doesNotThrow(() => createApp({ enableRateLimit: false }), value);
+    }
+  } finally {
+    if (original === undefined) delete process.env.TRUST_PROXY; else process.env.TRUST_PROXY = original;
+  }
 });
