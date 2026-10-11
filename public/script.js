@@ -197,7 +197,7 @@ function row(label, valueHtml, { mono = false } = {}) {
 
 function section(title, rows) {
   const body = rows.join('');
-  return body ? `<div class="section-title">${escapeHtml(title)}</div><dl class="details">${body}</dl>` : '';
+  return body ? `<div class="section"><div class="section-title">${escapeHtml(title)}</div><dl class="details">${body}</dl></div>` : '';
 }
 
 function renderCert(cert, idx, certs) {
@@ -214,6 +214,7 @@ function renderCert(cert, idx, certs) {
     </div>
     ${cert.error ? `<div class="problem">${escapeHtml(cert.error)}</div>` : ''}
     ${renderWarnings(cert.warnings)}
+    <div class="sections">
     ${section('Validity', [
       row('Valid from', escapeHtml(cert.validFrom)),
       row('Valid to', escapeHtml(cert.validTo))
@@ -238,6 +239,7 @@ function renderCert(cert, idx, certs) {
       row('Key usage', chips(cert.keyUsage || [])),
       row('Extended key usage', chips(cert.extKeyUsage || []))
     ])}
+    </div>
   </div>`;
 }
 
