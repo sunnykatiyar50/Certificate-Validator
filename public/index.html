@@ -15,12 +15,14 @@
     <div class="tabs">
       <button type="button" class="tab-btn active" id="fileTabBtn">File Upload</button>
       <button type="button" class="tab-btn" id="textTabBtn">Paste Text</button>
+      <button type="button" class="tab-btn" id="liveTabBtn">Live Site</button>
     </div>
     <div id="fileTab" class="tab-content active">
       <form id="fileForm" class="flex-col">
-        <label for="certificate">Upload Certificate File:</label>
+        <label for="certificate">Upload Certificate File (max 1 MB):</label>
         <input type="file" id="certificate" name="certificate" accept=".pem,.crt,.cer,.der,.pfx,.p12">
         <input type="password" id="filePassword" name="password" placeholder="Password (for PFX/P12, optional)">
+        <input type="text" id="fileHostname" name="hostname" placeholder="Hostname to match, e.g. example.com (optional)" autocomplete="off">
         <div class="form-actions">
           <button type="submit">Validate File</button>
           <button type="button" id="clearFileBtn" class="clear-btn">Clear</button>
@@ -30,16 +32,32 @@
     <div id="textTab" class="tab-content">
       <form id="textForm" class="flex-col">
         <label for="certText">Paste Certificate Text:</label>
-        <textarea id="certText" name="certText" rows="6" placeholder="Paste PEM, base64, or PFX/P12 (base64) certificate text here..."></textarea>
+        <textarea id="certText" name="certText" rows="6" placeholder="Paste PEM, base64, or PFX/P12 (base64) certificate text here. Include intermediates to verify the chain."></textarea>
         <input type="password" id="textPassword" name="password" placeholder="Password (for PFX/P12, optional)">
+        <input type="text" id="textHostname" name="hostname" placeholder="Hostname to match, e.g. example.com (optional)" autocomplete="off">
         <div class="form-actions">
           <button type="submit">Validate Text</button>
           <button type="button" id="clearTextBtn" class="clear-btn">Clear</button>
         </div>
       </form>
     </div>
-    <div id="result" class="result flex-row"></div>
+    <div id="liveTab" class="tab-content">
+      <form id="liveForm" class="flex-col">
+        <label for="liveHost">Check the certificate a server presents:</label>
+        <div class="host-row">
+          <input type="text" id="liveHost" name="host" placeholder="example.com" autocomplete="off" required>
+          <input type="number" id="livePort" name="port" placeholder="443" min="1" max="65535">
+        </div>
+        <div class="hint">The server connects to the host over TLS, reads its certificate chain, and validates it. Private and internal addresses are blocked.</div>
+        <div class="form-actions">
+          <button type="submit">Check Site</button>
+          <button type="button" id="clearLiveBtn" class="clear-btn">Clear</button>
+        </div>
+      </form>
+    </div>
+    <div id="result" class="result"></div>
+    <div id="version" class="footer"></div>
   </div>
   <script src="script.js"></script>
 </body>
-</html> 
+</html>
