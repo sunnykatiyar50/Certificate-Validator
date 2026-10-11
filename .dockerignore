@@ -4,8 +4,7 @@
 .dockerignore
 .env*
 **/node_modules
-backend/test
-backend/uploads
+test
 scripts
 docker-compose.yml
 Dockerfile

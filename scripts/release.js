@@ -4,14 +4,14 @@
 //   node scripts/release.js patch|minor|major|<x.y.z>
 //   node scripts/release.js --show        print the current version
 //
-// backend/package.json is the single source of truth for the version.
+// package.json (repo root) is the single source of truth for the version.
 const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
 const root = path.join(__dirname, '..');
-const pkgPath = path.join(root, 'backend', 'package.json');
-const lockPath = path.join(root, 'backend', 'package-lock.json');
+const pkgPath = path.join(root, 'package.json');
+const lockPath = path.join(root, 'package-lock.json');
 
 const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
 const fail = message => {
@@ -55,13 +55,13 @@ if (git('tag', '--list', tag)) fail(`Tag ${tag} already exists.`);
 
 pkg.data.version = version;
 writeJson(pkgPath, pkg);
-const files = ['backend/package.json'];
+const files = ['package.json'];
 if (fs.existsSync(lockPath)) {
   const lock = readJson(lockPath);
   lock.data.version = version;
   if (lock.data.packages && lock.data.packages['']) lock.data.packages[''].version = version;
   writeJson(lockPath, lock);
-  files.push('backend/package-lock.json');
+  files.push('package-lock.json');
 }
 
 git('add', ...files);
