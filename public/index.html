@@ -7,56 +7,161 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="container">
-    <div class="note">
-      <b>Note:</b> We do not store any uploaded files or input text. All data is discarded immediately after validating your certificate.
-    </div>
-    <h1>Certificate Validator</h1>
-    <div class="tabs">
-      <button type="button" class="tab-btn active" id="fileTabBtn">File Upload</button>
-      <button type="button" class="tab-btn" id="textTabBtn">Paste Text</button>
-      <button type="button" class="tab-btn" id="liveTabBtn">Live Site</button>
-    </div>
-    <div id="fileTab" class="tab-content active">
-      <form id="fileForm" class="flex-col">
-        <label for="certificate">Upload Certificate File (max 1 MB):</label>
-        <input type="file" id="certificate" name="certificate" accept=".pem,.crt,.cer,.der,.pfx,.p12">
-        <input type="password" id="filePassword" name="password" placeholder="Password (for PFX/P12, optional)">
-        <input type="text" id="fileHostname" name="hostname" placeholder="Hostname to match, e.g. example.com (optional)" autocomplete="off">
-        <div class="form-actions">
-          <button type="submit">Validate File</button>
-          <button type="button" id="clearFileBtn" class="clear-btn">Clear</button>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">Certificate<br>Validator</div>
+      <nav class="nav">
+        <div class="nav-group">Validate</div>
+        <button type="button" class="nav-item active" data-view="file">File Upload</button>
+        <button type="button" class="nav-item" data-view="text">Paste Text</button>
+        <button type="button" class="nav-item" data-view="live">Live Site</button>
+        <div class="nav-group">Create</div>
+        <button type="button" class="nav-item" data-view="generate">Generate Keys</button>
+        <button type="button" class="nav-item" data-view="history">History <span id="historyCount" class="count" hidden></span></button>
+      </nav>
+      <div class="sidebar-foot">
+        <p>Uploaded files and pasted text are discarded right after validation. Generated keys are never stored on the server; history lives only in this browser.</p>
+        <div id="version"></div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <section class="view active" id="view-file">
+        <div class="input card">
+          <h2>Upload a certificate</h2>
+          <form id="fileForm" class="form">
+            <label for="certificate">Certificate file <span class="hint">PEM, CRT, CER, DER, PFX/P12 &middot; max 1 MB</span></label>
+            <input type="file" id="certificate" name="certificate" accept=".pem,.crt,.cer,.der,.pfx,.p12">
+            <input type="password" id="filePassword" name="password" placeholder="Password (PFX/P12, optional)">
+            <input type="text" id="fileHostname" name="hostname" placeholder="Hostname to match, e.g. example.com (optional)" autocomplete="off">
+            <div class="actions">
+              <button type="submit" class="btn primary">Validate</button>
+              <button type="button" id="clearFileBtn" class="btn">Clear</button>
+            </div>
+          </form>
         </div>
-      </form>
-    </div>
-    <div id="textTab" class="tab-content">
-      <form id="textForm" class="flex-col">
-        <label for="certText">Paste Certificate Text:</label>
-        <textarea id="certText" name="certText" rows="6" placeholder="Paste PEM, base64, or PFX/P12 (base64) certificate text here. Include intermediates to verify the chain."></textarea>
-        <input type="password" id="textPassword" name="password" placeholder="Password (for PFX/P12, optional)">
-        <input type="text" id="textHostname" name="hostname" placeholder="Hostname to match, e.g. example.com (optional)" autocomplete="off">
-        <div class="form-actions">
-          <button type="submit">Validate Text</button>
-          <button type="button" id="clearTextBtn" class="clear-btn">Clear</button>
+        <div class="output" id="result-file" data-empty="Results will appear here."></div>
+      </section>
+
+      <section class="view" id="view-text">
+        <div class="input card">
+          <h2>Paste certificate text</h2>
+          <form id="textForm" class="form">
+            <label for="certText">Certificate text <span class="hint">Include intermediates to verify the chain</span></label>
+            <textarea id="certText" name="certText" rows="9" placeholder="Paste PEM, base64, or PFX/P12 (base64) here..."></textarea>
+            <input type="password" id="textPassword" name="password" placeholder="Password (PFX/P12, optional)">
+            <input type="text" id="textHostname" name="hostname" placeholder="Hostname to match, e.g. example.com (optional)" autocomplete="off">
+            <div class="actions">
+              <button type="submit" class="btn primary">Validate</button>
+              <button type="button" id="clearTextBtn" class="btn">Clear</button>
+            </div>
+          </form>
         </div>
-      </form>
-    </div>
-    <div id="liveTab" class="tab-content">
-      <form id="liveForm" class="flex-col">
-        <label for="liveHost">Check the certificate a server presents:</label>
-        <div class="host-row">
-          <input type="text" id="liveHost" name="host" placeholder="example.com" autocomplete="off" required>
-          <input type="number" id="livePort" name="port" placeholder="443" min="1" max="65535">
+        <div class="output" id="result-text" data-empty="Results will appear here."></div>
+      </section>
+
+      <section class="view" id="view-live">
+        <div class="input card">
+          <h2>Check a live site</h2>
+          <form id="liveForm" class="form">
+            <label for="liveHost">Host and port <span class="hint">A URL or host:port also works</span></label>
+            <div class="host-row">
+              <input type="text" id="liveHost" name="host" placeholder="example.com" autocomplete="off" required>
+              <input type="number" id="livePort" name="port" placeholder="443" min="1" max="65535">
+            </div>
+            <p class="hint">The server connects over TLS, reads the certificate chain the site presents and validates it. Private and internal addresses are blocked.</p>
+            <div class="actions">
+              <button type="submit" class="btn primary">Check site</button>
+              <button type="button" id="clearLiveBtn" class="btn">Clear</button>
+            </div>
+          </form>
         </div>
-        <div class="hint">The server connects to the host over TLS, reads its certificate chain, and validates it. Private and internal addresses are blocked.</div>
-        <div class="form-actions">
-          <button type="submit">Check Site</button>
-          <button type="button" id="clearLiveBtn" class="clear-btn">Clear</button>
+        <div class="output" id="result-live" data-empty="Results will appear here."></div>
+      </section>
+
+      <section class="view" id="view-generate">
+        <div class="input card">
+          <h2>Generate a key pair</h2>
+          <form id="generateForm" class="form">
+            <label for="genName">Name <span class="hint">Label for history (optional)</span></label>
+            <input type="text" id="genName" maxlength="80" placeholder="e.g. staging web server" autocomplete="off">
+
+            <label for="genOutput">Create</label>
+            <select id="genOutput">
+              <option value="certificate">Key pair + self-signed certificate</option>
+              <option value="csr">Key pair + certificate signing request (CSR)</option>
+              <option value="keys">Key pair only</option>
+            </select>
+
+            <div class="two-col">
+              <div>
+                <label for="genAlgorithm">Algorithm</label>
+                <select id="genAlgorithm"><option>Loading...</option></select>
+              </div>
+              <div>
+                <label for="genHash">Signature hash</label>
+                <select id="genHash">
+                  <option value="SHA-256">SHA-256</option>
+                  <option value="SHA-384">SHA-384</option>
+                  <option value="SHA-512">SHA-512</option>
+                </select>
+              </div>
+            </div>
+            <p class="hint">RSA is the most widely compatible. ECDSA P-256 and Ed25519 give smaller keys and faster handshakes.</p>
+
+            <div id="genSubject" class="form">
+              <label for="genCommonName">Common name</label>
+              <input type="text" id="genCommonName" maxlength="64" placeholder="example.com" autocomplete="off">
+              <label for="genSans">Subject alternative names <span class="hint">Hosts, IPs, emails or URLs, separated by spaces or commas</span></label>
+              <textarea id="genSans" rows="2" placeholder="www.example.com, *.example.com, 10.0.0.5"></textarea>
+              <div class="two-col">
+                <div>
+                  <label for="genValidity">Validity (days)</label>
+                  <input type="number" id="genValidity" value="365" min="1" max="3650">
+                </div>
+                <label class="check"><input type="checkbox" id="genIsCA"> CA certificate</label>
+              </div>
+              <details>
+                <summary>More subject details</summary>
+                <div class="form details-body">
+                  <input type="text" id="genOrg" maxlength="64" placeholder="Organization (O)" autocomplete="off">
+                  <input type="text" id="genOu" maxlength="64" placeholder="Organizational unit (OU)" autocomplete="off">
+                  <div class="two-col">
+                    <input type="text" id="genCountry" maxlength="2" placeholder="Country (US)" autocomplete="off">
+                    <input type="text" id="genState" maxlength="64" placeholder="State" autocomplete="off">
+                  </div>
+                  <input type="text" id="genLocality" maxlength="64" placeholder="City / locality" autocomplete="off">
+                </div>
+              </details>
+            </div>
+
+            <label for="genHistory">Save to history</label>
+            <select id="genHistory">
+              <option value="with">Yes, including the private key</option>
+              <option value="without">Yes, without the private key</option>
+              <option value="none">No, don't save</option>
+            </select>
+            <p class="hint warn-text">History is stored unencrypted in this browser. Don't keep private keys for anything sensitive on a shared computer.</p>
+
+            <div class="actions">
+              <button type="submit" class="btn primary">Generate</button>
+            </div>
+          </form>
         </div>
-      </form>
-    </div>
-    <div id="result" class="result"></div>
-    <div id="version" class="footer"></div>
+        <div class="output" id="result-generate" data-empty="Your new key pair will appear here."></div>
+      </section>
+
+      <section class="view" id="view-history">
+        <div class="input card">
+          <div class="card-head">
+            <h2>History</h2>
+            <button type="button" class="btn small" data-action="clear-history" id="clearHistoryBtn" hidden>Clear all</button>
+          </div>
+          <div id="historyList" class="history-list"></div>
+        </div>
+        <div class="output" id="result-history" data-empty="Select an item to see its details."></div>
+      </section>
+    </main>
   </div>
   <script src="script.js"></script>
 </body>
