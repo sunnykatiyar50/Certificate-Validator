@@ -82,7 +82,7 @@ The GitHub Actions workflow (`.github/workflows/docker.yml`) runs the tests, the
 | Event | Result |
 | --- | --- |
 | Tag `vX.Y.Z` | Publishes `ghcr.io/<owner>/certificate-validator` as `X.Y.Z`, `X.Y` and `latest` (fails if the tag does not match `package.json`) |
-| Push to `main` | Publishes `edge` and `sha-<commit>` |
+| Push to `main` | Publishes `latest`, `edge` and `sha-<commit>` (no version tag) |
 | Pull request | Tests and builds only, nothing is published |
 
 ## Stop
