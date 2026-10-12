@@ -59,7 +59,7 @@ async function sampleEntry(name, extra = {}) {
 const TOOL_POSTS = [
   '/api/validate-certificate', '/api/check-host', '/api/generate-keypair', '/api/history',
   '/api/convert', '/api/decode', '/api/match', '/api/csr/create', '/api/ca/create', '/api/ca/sign',
-  '/api/dev-cert', '/api/crl/create', '/api/key-tools'
+  '/api/dev-cert', '/api/crl/create', '/api/key-tools', '/api/ca/issue', '/api/cas', '/api/cas/check'
 ];
 
 // ---------- configuration ----------

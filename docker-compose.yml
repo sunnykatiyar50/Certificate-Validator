@@ -22,6 +22,7 @@ services:
       USERS: ${USERS:-}
       SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env (copy sample.env)}
       SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-12}
+      VAULT_KEY: ${VAULT_KEY:-}
       # Set to 1 when running behind a reverse proxy so rate limiting sees client IPs.
       TRUST_PROXY: ${TRUST_PROXY:-}
       CORS_ORIGIN: ${CORS_ORIGIN:-}

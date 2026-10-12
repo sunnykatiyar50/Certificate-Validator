@@ -10,6 +10,9 @@ const { fetchServerChain, LiveCheckError } = require('./lib/liveCheck');
 const { generateKeyPair, listAlgorithms, KeygenError } = require('./lib/keygen');
 const { AuthConfigError, loadAuthConfig, createAuth } = require('./lib/auth');
 const { HistoryStore, HistoryError } = require('./lib/historyStore');
+const { Vault, VaultError, loadVaultKey } = require('./lib/vault');
+const { inspectCa } = require('./lib/caImport');
+const { issueCertificate } = require('./lib/issue');
 const { loadReleaseNotes } = require('./lib/changelog');
 const { InputError } = require('./lib/bundle');
 const { KeyError } = require('./lib/keys');
@@ -53,6 +56,7 @@ function createApp({
   corsOrigin = process.env.CORS_ORIGIN,
   auth: authConfig = loadAuthConfig(process.env),
   historyStore = null,
+  vault = null,
   dataDir = process.env.DATA_DIR || path.join(__dirname, 'data'),
   publicDir = path.join(__dirname, 'public')
 } = {}) {
@@ -65,6 +69,9 @@ function createApp({
   // The history database is opened on first use, so apps that never touch history create no files.
   let store = historyStore;
   const getStore = () => (store = store || new HistoryStore(path.join(dataDir, 'history.db')));
+  // Saved CAs and server-kept private keys, encrypted at rest. Opened on first use for the same reason.
+  let vaultStore = vault;
+  const getVault = () => (vaultStore = vaultStore || new Vault(path.join(dataDir, 'vault.db'), loadVaultKey({ dataDir })));
 
   app.use(helmet({
     contentSecurityPolicy: {
@@ -162,6 +169,17 @@ function createApp({
     return inputs;
   };
 
+  // The CA for a request: one saved on the server (by id, owner only) or the uploaded / pasted certificate and key.
+  const caInputsFor = (req, idField = 'caId', fileField = 'ca', textField = 'caText') => {
+    const id = req.body && req.body[idField];
+    if (typeof id === 'string' && id) {
+      const saved = getVault().getCaMaterial(req.user.username, id);
+      if (!saved) throw new InputError('That saved CA was not found. It may have been deleted.');
+      return [{ name: 'saved-ca.pem', buffer: Buffer.from(saved.certificatePem + (saved.chainPem || '') + saved.privateKeyPem) }];
+    }
+    return inputsFor(req, fileField, textField);
+  };
+
   const flag = value => value === true || value === 'true' || value === 'on' || value === '1';
 
   // Every tool needs a signed-in user: they accept private keys, keystores and CA material.
@@ -175,6 +193,7 @@ function createApp({
         res.json(await handler(req));
       } catch (err) {
         if (USER_ERRORS.some(E => err instanceof E)) return res.status(400).json({ error: err.message });
+        if (err instanceof VaultError) return res.status(err.status).json({ error: err.message });
         console.error('Tool request failed:', err.message);
         res.status(500).json({ error: 'The request failed.' });
       }
@@ -211,17 +230,65 @@ function createApp({
 
   app.post('/api/ca/create', ...tool(20, 'Too many requests, please try again shortly.', req => {
     const b = req.body || {};
-    return createCa(b, { issuerInputs: inputsFor(req, 'issuer', 'issuerText'), issuerPassword: b.issuerPassword });
+    return createCa(b, { issuerInputs: caInputsFor(req, 'issuerId', 'issuer', 'issuerText'), issuerPassword: b.issuerPassword });
   }));
 
   app.post('/api/ca/sign', ...tool(30, 'Too many requests, please try again shortly.', req => {
     const b = req.body || {};
-    return signCsr(inputsFor(req, 'csr', 'csrText'), inputsFor(req, 'ca', 'caText'), {
+    return signCsr(inputsFor(req, 'csr', 'csrText'), caInputsFor(req), {
       caPassword: b.caPassword, validityDays: b.validityDays, hash: b.hash, usage: b.usage,
       copySans: b.copySans === undefined ? undefined : flag(b.copySans), sans: b.sans, pathLength: b.pathLength,
       crlUrl: b.crlUrl
     });
   }));
+
+  // A certificate and a new private key from a CA in one step (the CA may be one saved on the server).
+  app.post('/api/ca/issue', ...tool(30, 'Too many requests, please try again shortly.', req => {
+    const b = req.body || {};
+    return issueCertificate({
+      commonName: b.commonName, sans: b.sans, algorithm: b.algorithm, hash: b.hash, usage: b.usage, validityDays: b.validityDays,
+      crlUrl: b.crlUrl, organization: b.organization, organizationalUnit: b.organizationalUnit,
+      country: b.country, state: b.state, locality: b.locality
+    }, caInputsFor(req), { caPassword: b.caPassword });
+  }));
+
+  // ----- the CA library: check an upload, and keep CAs on the server (key encrypted at rest, visible to the owner only) -----
+  app.post('/api/cas/check', ...tool(30, 'Too many requests, please try again shortly.', req => {
+    const b = req.body || {};
+    return inspectCa(inputsFor(req, 'ca', 'caText'), { password: b.caPassword });
+  }));
+
+  const casSummary = ({ id, name, createdAt, certificatePem, ...rest }) => ({ id, name, createdAt, certificatePem, ...rest });
+
+  app.post('/api/cas', ...tool(30, 'Too many requests, please try again shortly.', async req => {
+    const b = req.body || {};
+    const ca = await inspectCa(inputsFor(req, 'ca', 'caText'), { password: b.caPassword });
+    const { privateKeyPem, certificatePem, ...summary } = ca;
+    return { ca: casSummary(getVault().addCa(req.user.username, { name: b.name || ca.subject, certificatePem, privateKeyPem, summary })) };
+  }));
+
+  app.get('/api/cas', auth.requireAuth, (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json({ cas: getVault().listCas(req.user.username).map(casSummary) });
+  });
+
+  app.get('/api/cas/:id/key', auth.requireAuth, (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    const ca = getVault().getCaMaterial(req.user.username, req.params.id);
+    if (!ca) return res.status(404).json({ error: 'CA not found.' });
+    res.json({ privateKeyPem: ca.privateKeyPem });
+  });
+
+  app.patch('/api/cas/:id', auth.requireAuth, (req, res) => {
+    const ca = getVault().rename(req.user.username, req.params.id, (req.body || {}).name);
+    if (!ca) return res.status(404).json({ error: 'CA not found.' });
+    res.json({ ca: casSummary(ca) });
+  });
+
+  app.delete('/api/cas/:id', auth.requireAuth, (req, res) => {
+    if (!getVault().delete(req.user.username, req.params.id)) return res.status(404).json({ error: 'CA not found.' });
+    res.json({ ok: true });
+  });
 
   // Local development helpers. Like the other tools they take keys, so they need a session, run in memory and
   // are never cached. A dev certificate comes with a new CA unless an existing CA is supplied.
@@ -231,12 +298,12 @@ function createApp({
       names: b.names, algorithm: b.algorithm, hash: b.hash, validityDays: b.validityDays, clientAuth: flag(b.clientAuth),
       crlUrl: b.crlUrl, bundlePassword: b.bundlePassword,
       caName: b.caName, caAlgorithm: b.caAlgorithm, caValidityDays: b.caValidityDays, scope: b.scope
-    }, { caInputs: inputsFor(req, 'ca', 'caText'), caPassword: b.caPassword });
+    }, { caInputs: caInputsFor(req), caPassword: b.caPassword });
   }));
 
   app.post('/api/crl/create', ...tool(30, 'Too many requests, please try again shortly.', req => {
     const b = req.body || {};
-    const caInputs = inputsFor(req, 'ca', 'caText');
+    const caInputs = caInputsFor(req);
     if (!caInputs.length) throw new InputError('Provide the CA certificate and private key that sign the CRL.');
     return createCrl(caInputs, {
       caPassword: b.caPassword, serials: b.serials, reason: b.reason, nextUpdateDays: b.nextUpdateDays, hash: b.hash,
@@ -307,11 +374,41 @@ function createApp({
     res.set('Cache-Control', 'no-store');
     let owner = req.user.username;
     if (isAdmin(req)) owner = typeof req.query.owner === 'string' && req.query.owner ? req.query.owner : null;
-    res.json({ history: getStore().list(owner), user: { username: req.user.username, role: req.user.role } });
+    const kept = new Set(getVault().keyIds(req.user.username));
+    const history = getStore().list(owner).map(e => (e.owner === req.user.username && kept.has(e.id) ? { ...e, keyOnServer: true } : e));
+    res.json({ history, user: { username: req.user.username, role: req.user.role } });
   });
 
   app.post('/api/history', auth.requireAuth, limiter(60, 'Too many requests, please try again shortly.'), (req, res) => {
     res.status(201).json({ entry: getStore().add(req.user.username, req.body) });
+  });
+
+  // A private key kept on the server for one of your own history items (encrypted at rest; never shown to admins).
+  const ownEntry = (req, res) => {
+    const entry = getStore().get(req.params.id);
+    if (entry && entry.owner === req.user.username) return entry;
+    res.status(404).json({ error: 'History item not found.' });
+    return null;
+  };
+
+  app.put('/api/history/:id/key', auth.requireAuth, limiter(60, 'Too many requests, please try again shortly.'), (req, res) => {
+    if (!ownEntry(req, res)) return;
+    getVault().putKey(req.user.username, req.params.id, (req.body || {}).privateKeyPem);
+    res.json({ ok: true });
+  });
+
+  app.get('/api/history/:id/key', auth.requireAuth, (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    if (!ownEntry(req, res)) return;
+    const privateKeyPem = getVault().getKey(req.user.username, req.params.id);
+    if (!privateKeyPem) return res.status(404).json({ error: 'No private key is kept on the server for this item.' });
+    res.json({ privateKeyPem });
+  });
+
+  app.delete('/api/history/:id/key', auth.requireAuth, (req, res) => {
+    if (!ownEntry(req, res)) return;
+    getVault().delete(req.user.username, req.params.id);
+    res.json({ ok: true });
   });
 
   app.patch('/api/history/:id', auth.requireAuth, (req, res) => {
@@ -320,19 +417,22 @@ function createApp({
   });
 
   app.delete('/api/history/:id', auth.requireAuth, (req, res) => {
-    if (!findAccessible(req, req.params.id)) return res.status(404).json({ error: 'History item not found.' });
+    const entry = findAccessible(req, req.params.id);
+    if (!entry) return res.status(404).json({ error: 'History item not found.' });
     getStore().delete(req.params.id);
+    getVault().delete(entry.owner, req.params.id);
     res.json({ ok: true });
   });
 
   // Clears the signed-in user's own history only.
   app.delete('/api/history', auth.requireAuth, (req, res) => {
+    getVault().deleteKeys(req.user.username);
     res.json({ deleted: getStore().deleteAllFor(req.user.username) });
   });
 
   // JSON error responses for upload problems (size, type), bad history input and anything unexpected.
   app.use((err, req, res, next) => {
-    if (err instanceof HistoryError) return res.status(err.status).json({ error: err.message });
+    if (err instanceof HistoryError || err instanceof VaultError) return res.status(err.status).json({ error: err.message });
     if (err instanceof multer.MulterError) {
       const message = err.code === 'LIMIT_FILE_SIZE'
         ? `File too large (max ${MAX_UPLOAD_BYTES / 1024 / 1024} MB).`
@@ -364,6 +464,14 @@ if (require.main === module) {
     process.exit(1);
   }
   if (authConfig.disabled) console.warn('WARNING: AUTH_DISABLED is set. Everyone can use the app as an admin without signing in.');
+
+  // Fail at start-up, not on a user's first save, if the key that protects stored private keys is unusable.
+  try {
+    loadVaultKey({ dataDir: process.env.DATA_DIR || path.join(__dirname, 'data') });
+  } catch (err) {
+    console.error(`Cannot set up the key for stored private keys: ${err.message}`);
+    process.exit(1);
+  }
 
   const PORT = process.env.PORT || 33003;
   createApp({ auth: authConfig, allowPrivateHosts: process.env.ALLOW_PRIVATE_HOSTS === '1' }).listen(PORT, () => {

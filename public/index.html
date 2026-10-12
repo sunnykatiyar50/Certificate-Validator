@@ -26,6 +26,8 @@
         <button type="button" class="nav-item" data-view="history">History <span id="historyCount" class="count" hidden></span></button>
         <div class="nav-group">Local CA</div>
         <button type="button" class="nav-item" data-view="dev-cert">Dev Certificate</button>
+        <button type="button" class="nav-item" data-view="cas">My CAs <span id="casCount" class="count" hidden></span></button>
+        <button type="button" class="nav-item" data-view="issue">Issue Certificate</button>
         <button type="button" class="nav-item" data-view="ca-create">Create CA</button>
         <button type="button" class="nav-item" data-view="ca-sign">Sign a CSR</button>
         <button type="button" class="nav-item" data-view="crl">Revoke / CRL</button>
@@ -176,10 +178,11 @@
             <label for="genHistory">Save to history</label>
             <select id="genHistory">
               <option value="with">Yes, and keep the private key in this browser</option>
+              <option value="server">Yes, and keep the private key on the server (encrypted)</option>
               <option value="without">Yes, without the private key</option>
               <option value="none">No, don't save</option>
             </select>
-            <p class="hint">History is saved on the server under your account (administrators can see everyone's history). The private key is never sent for storage: if you keep it, it stays in this browser only, unencrypted.</p>
+            <p class="hint">History is saved on the server under your account (administrators can see everyone's history, never your keys). A private key is only kept if you choose to: in this browser (unencrypted) or on the server, where it is encrypted and only you can read it.</p>
 
             <div class="actions">
               <button type="submit" class="btn primary">Generate</button>
@@ -308,11 +311,16 @@
             </select>
 
             <div id="caParent" class="form" hidden>
-              <label for="caParentFiles">Parent CA certificate and private key <span class="hint">PEM files, PFX/P12 or JKS</span></label>
-              <input type="file" id="caParentFiles" accept=".pem,.crt,.cer,.key,.pfx,.p12,.jks,.keystore" multiple>
-              <textarea id="caParentText" rows="4" placeholder="Or paste the parent certificate and its private key (PEM)"></textarea>
-              <input type="password" id="caParentPassword" placeholder="Password (encrypted key, PFX/P12 or JKS, optional)" autocomplete="off">
-              <p class="hint warn-text">The parent's private key is sent to this server to sign, held in memory only and never stored.</p>
+              <label for="caParentCaSource">Parent CA</label>
+              <select id="caParentCaSource" class="ca-source"></select>
+              <p class="hint" id="caParentCaHint"></p>
+              <div id="caParentCaManual" class="form">
+                <label for="caParentFiles">Parent CA certificate and private key <span class="hint">PEM files, PFX/P12 or JKS</span></label>
+                <input type="file" id="caParentFiles" accept=".pem,.crt,.cer,.key,.pfx,.p12,.jks,.keystore" multiple>
+                <textarea id="caParentText" rows="4" placeholder="Or paste the parent certificate and its private key (PEM)"></textarea>
+                <input type="password" id="caParentPassword" placeholder="Password (encrypted key, PFX/P12 or JKS, optional)" autocomplete="off">
+                <p class="hint warn-text">The parent's private key is sent to this server to sign, held in memory only and never stored.</p>
+              </div>
             </div>
 
             <label for="caCommonName">Common name</label>
@@ -364,7 +372,13 @@
                 <input type="text" id="caLocality" maxlength="64" placeholder="City / locality" autocomplete="off">
               </div>
             </details>
-            <p class="hint warn-text">The CA private key is returned once and never stored on the server. Copy or download it now; anyone who has it can issue certificates your devices will trust.</p>
+            <label for="caSave">Keep this CA</label>
+            <select id="caSave">
+              <option value="browser">In this browser only</option>
+              <option value="server">On the server (key encrypted)</option>
+              <option value="none">Don't keep it</option>
+            </select>
+            <p class="hint" id="caSaveHint"></p>
             <div class="actions">
               <button type="submit" class="btn primary">Create CA</button>
             </div>
@@ -381,11 +395,16 @@
             <input type="file" id="signCsrFiles" accept=".csr,.pem,.der">
             <textarea id="signCsrText" rows="4" placeholder="-----BEGIN CERTIFICATE REQUEST-----"></textarea>
 
-            <label for="signCaFiles">CA certificate and private key <span class="hint">PEM files, PFX/P12 or JKS. Add intermediates to include them in the chain.</span></label>
-            <input type="file" id="signCaFiles" accept=".pem,.crt,.cer,.key,.pfx,.p12,.jks,.keystore" multiple>
-            <textarea id="signCaText" rows="4" placeholder="Or paste the CA certificate and its private key (PEM)"></textarea>
-            <input type="password" id="signCaPassword" placeholder="Password (encrypted key, PFX/P12 or JKS, optional)" autocomplete="off">
-            <p class="hint warn-text">The CA private key is sent to this server to sign, held in memory only and never stored.</p>
+            <label for="signCaSource">Certificate authority</label>
+            <select id="signCaSource" class="ca-source"></select>
+            <p class="hint" id="signCaHint"></p>
+            <div id="signCaManual" class="form">
+              <label for="signCaFiles">CA certificate and private key <span class="hint">PEM files, PFX/P12 or JKS. Add intermediates to include them in the chain.</span></label>
+              <input type="file" id="signCaFiles" accept=".pem,.crt,.cer,.key,.pfx,.p12,.jks,.keystore" multiple>
+              <textarea id="signCaText" rows="4" placeholder="Or paste the CA certificate and its private key (PEM)"></textarea>
+              <input type="password" id="signCaPassword" placeholder="Password (encrypted key, PFX/P12 or JKS, optional)" autocomplete="off">
+              <p class="hint warn-text">The CA private key is sent to this server to sign, held in memory only and never stored.</p>
+            </div>
 
             <div class="two-col">
               <div>
@@ -423,6 +442,110 @@
           </form>
         </div>
         <div class="output" id="result-ca-sign" data-empty="The signed certificate will appear here."></div>
+      </section>
+
+      <section class="view" id="view-cas">
+        <div class="input card">
+          <h2>Add a CA you already have</h2>
+          <p class="hint">Upload your own CA, then pick it whenever you issue, sign or revoke. Nothing is kept unless you choose where.</p>
+          <form id="casAddForm" class="form">
+            <label for="casFiles">CA certificate and private key <span class="hint">PEM files, PFX/P12 or JKS. Add intermediates to include them in the chain.</span></label>
+            <input type="file" id="casFiles" accept=".pem,.crt,.cer,.key,.pfx,.p12,.jks,.keystore" multiple>
+            <textarea id="casText" rows="5" placeholder="Or paste the CA certificate and its private key (PEM)"></textarea>
+            <input type="password" id="casPassword" placeholder="Password (encrypted key, PFX/P12 or JKS, optional)" autocomplete="off">
+            <label for="casName">Name <span class="hint">Optional, defaults to the CA's common name</span></label>
+            <input type="text" id="casName" maxlength="80" placeholder="Team dev CA" autocomplete="off">
+            <label for="casWhere">Keep it</label>
+            <select id="casWhere">
+              <option value="browser">In this browser only</option>
+              <option value="server">On the server (key encrypted)</option>
+            </select>
+            <p class="hint" id="casWhereHint"></p>
+            <div class="actions">
+              <button type="submit" class="btn primary">Save CA</button>
+              <button type="button" class="btn" data-action="clear" data-ids="casFiles,casText,casPassword,casName" data-out="">Clear</button>
+            </div>
+          </form>
+        </div>
+        <div class="output" id="result-cas" data-empty="Your saved CAs will be listed here."></div>
+      </section>
+
+      <section class="view" id="view-issue">
+        <div class="input card">
+          <h2>Issue a certificate and key from a CA</h2>
+          <p class="hint">Makes a new private key and a certificate signed by your CA in one step. No CSR needed.</p>
+          <form id="issueForm" class="form">
+            <label for="issueCaSource">Certificate authority</label>
+            <select id="issueCaSource" class="ca-source"></select>
+            <p class="hint" id="issueCaHint"></p>
+            <div id="issueCaManual" class="form">
+              <label for="issueCaFiles">CA certificate and private key <span class="hint">PEM files, PFX/P12 or JKS. Add the CA to My CAs to reuse it.</span></label>
+              <input type="file" id="issueCaFiles" accept=".pem,.crt,.cer,.key,.pfx,.p12,.jks,.keystore" multiple>
+              <textarea id="issueCaText" rows="4" placeholder="Or paste the CA certificate and its private key (PEM)"></textarea>
+              <input type="password" id="issueCaPassword" placeholder="Password (encrypted key, PFX/P12 or JKS, optional)" autocomplete="off">
+              <p class="hint warn-text">The CA private key is sent to this server to sign, held in memory only and never stored.</p>
+            </div>
+
+            <label for="issueCommonName">Common name</label>
+            <input type="text" id="issueCommonName" maxlength="64" placeholder="app.internal" autocomplete="off">
+            <label for="issueSans">Subject alternative names <span class="hint">Host names and IP addresses, separated by commas, spaces or lines</span></label>
+            <textarea id="issueSans" rows="2" placeholder="app.internal, *.app.internal, 10.0.0.5"></textarea>
+            <div class="two-col">
+              <div>
+                <label for="issueAlgorithm">Key algorithm</label>
+                <select id="issueAlgorithm">
+                  <option value="ECDSA-P256">ECDSA P-256</option>
+                  <option value="ECDSA-P384">ECDSA P-384</option>
+                  <option value="RSA-2048">RSA 2048</option>
+                  <option value="RSA-3072">RSA 3072</option>
+                  <option value="RSA-4096">RSA 4096</option>
+                  <option value="Ed25519">Ed25519</option>
+                </select>
+              </div>
+              <div>
+                <label for="issueValidity">Validity (days)</label>
+                <input type="number" id="issueValidity" value="90" min="1" max="3650">
+              </div>
+            </div>
+            <label for="issueUsage">Certificate type</label>
+            <select id="issueUsage">
+              <option value="server">TLS server</option>
+              <option value="client">TLS client</option>
+              <option value="both">TLS server and client</option>
+            </select>
+            <details>
+              <summary>More options</summary>
+              <div class="form details-body">
+                <label for="issueHash">Signature hash</label>
+                <select id="issueHash">
+                  <option value="SHA-256">SHA-256</option>
+                  <option value="SHA-384">SHA-384</option>
+                  <option value="SHA-512">SHA-512</option>
+                </select>
+                <label for="issueCrlUrl">CRL distribution point <span class="hint">Optional</span></label>
+                <input type="text" id="issueCrlUrl" maxlength="200" placeholder="http://localhost:8080/ca.crl" autocomplete="off">
+                <input type="text" id="issueOrg" maxlength="64" placeholder="Organization (O)" autocomplete="off">
+                <input type="text" id="issueOu" maxlength="64" placeholder="Organizational unit (OU)" autocomplete="off">
+                <div class="two-col">
+                  <input type="text" id="issueCountry" maxlength="2" placeholder="Country (US)" autocomplete="off">
+                  <input type="text" id="issueState" maxlength="64" placeholder="State" autocomplete="off">
+                </div>
+                <input type="text" id="issueLocality" maxlength="64" placeholder="City / locality" autocomplete="off">
+              </div>
+            </details>
+            <label for="issueSave">Save to history</label>
+            <select id="issueSave">
+              <option value="with">Yes, and keep the private key in this browser</option>
+              <option value="server">Yes, and keep the private key on the server (encrypted)</option>
+              <option value="without">Yes, without the private key</option>
+              <option value="none">No, don't save</option>
+            </select>
+            <div class="actions">
+              <button type="submit" class="btn primary">Issue certificate</button>
+            </div>
+          </form>
+        </div>
+        <div class="output" id="result-issue" data-empty="The certificate and its private key will appear here."></div>
       </section>
 
       <section class="view" id="view-convert">
@@ -499,11 +622,16 @@
               <p class="hint" id="devScopeHint"></p>
             </div>
             <div id="devCaExisting" class="form" hidden>
-              <label for="devCaFiles">CA certificate and private key <span class="hint">PEM files, PFX/P12 or JKS</span></label>
-              <input type="file" id="devCaFiles" accept=".pem,.crt,.cer,.key,.pfx,.p12,.jks,.keystore" multiple>
-              <textarea id="devCaText" rows="4" placeholder="Or paste the CA certificate and its private key (PEM)"></textarea>
-              <input type="password" id="devCaPassword" placeholder="Password (encrypted key, PFX/P12 or JKS, optional)" autocomplete="off">
-              <p class="hint warn-text">The CA private key is sent to this server to sign, held in memory only and never stored. It is not included in the downloads.</p>
+              <label for="devExCaSource">Certificate authority</label>
+              <select id="devExCaSource" class="ca-source"></select>
+              <p class="hint" id="devExCaHint"></p>
+              <div id="devExCaManual" class="form">
+                <label for="devCaFiles">CA certificate and private key <span class="hint">PEM files, PFX/P12 or JKS</span></label>
+                <input type="file" id="devCaFiles" accept=".pem,.crt,.cer,.key,.pfx,.p12,.jks,.keystore" multiple>
+                <textarea id="devCaText" rows="4" placeholder="Or paste the CA certificate and its private key (PEM)"></textarea>
+                <input type="password" id="devCaPassword" placeholder="Password (encrypted key, PFX/P12 or JKS, optional)" autocomplete="off">
+                <p class="hint warn-text">The CA private key is sent to this server to sign, held in memory only and never stored. It is not included in the downloads.</p>
+              </div>
             </div>
 
             <details>
@@ -528,11 +656,16 @@
           <h2>Revoke certificates (CRL)</h2>
           <p class="hint">Make a revocation list from your CA to test how clients treat revoked certificates. To add to a list later, supply the previous one.</p>
           <form id="crlForm" class="form">
-            <label for="crlCaFiles">CA certificate and private key <span class="hint">PEM files, PFX/P12 or JKS</span></label>
-            <input type="file" id="crlCaFiles" accept=".pem,.crt,.cer,.key,.pfx,.p12,.jks,.keystore" multiple>
-            <textarea id="crlCaText" rows="4" placeholder="Or paste the CA certificate and its private key (PEM)"></textarea>
-            <input type="password" id="crlCaPassword" placeholder="Password (encrypted key, PFX/P12 or JKS, optional)" autocomplete="off">
-            <p class="hint warn-text">The CA private key is sent to this server to sign, held in memory only and never stored.</p>
+            <label for="crlCaSource">Certificate authority</label>
+            <select id="crlCaSource" class="ca-source"></select>
+            <p class="hint" id="crlCaHint"></p>
+            <div id="crlCaManual" class="form">
+              <label for="crlCaFiles">CA certificate and private key <span class="hint">PEM files, PFX/P12 or JKS</span></label>
+              <input type="file" id="crlCaFiles" accept=".pem,.crt,.cer,.key,.pfx,.p12,.jks,.keystore" multiple>
+              <textarea id="crlCaText" rows="4" placeholder="Or paste the CA certificate and its private key (PEM)"></textarea>
+              <input type="password" id="crlCaPassword" placeholder="Password (encrypted key, PFX/P12 or JKS, optional)" autocomplete="off">
+              <p class="hint warn-text">The CA private key is sent to this server to sign, held in memory only and never stored.</p>
+            </div>
 
             <label for="crlCertFiles">Certificates to revoke <span class="hint">Must have been issued by this CA</span></label>
             <input type="file" id="crlCertFiles" accept=".pem,.crt,.cer,.der" multiple>

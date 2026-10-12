@@ -229,3 +229,33 @@ test('the local development tools render from real server output', async () => {
   const inspect = render('renderKeyTools(__data)', keyTools([{ name: 'k.pem', buffer: bytes(rsa.export({ type: 'pkcs8', format: 'pem' })) }], {}));
   assert.match(inspect, /SPKI pin/);
 });
+
+test('saved CAs and issued certificates render from real server output', async () => {
+  const { render } = loadBrowserScript();
+  const { inspectCa } = require('../lib/caImport');
+  const { issueCertificate } = require('../lib/issue');
+  const ca = await createCa({ commonName: 'Saved <b>CA</b>' });
+  const input = [{ name: 'ca.pem', buffer: bytes(ca.certificatePem + ca.privateKeyPem) }];
+
+  const checked = await inspectCa(input);
+  const card = render('renderSavedCa(__data)', { ...checked, id: 'abc', name: 'My <i>CA</i>', createdAt: new Date().toISOString(), where: 'server' });
+  assert.match(card, /On the server/);
+  assert.match(card, /data-action="ca-issue" data-pick="server:abc"/);
+  for (const action of ['ca-sign-with', 'ca-crl-with', 'ca-download-cert', 'ca-download-key', 'ca-rename', 'ca-delete']) {
+    assert.match(card, new RegExp(`data-action="${action}"`), action);
+  }
+  assert.ok(!/<i>CA<\/i>|<b>CA<\/b>/.test(card), 'names are escaped');
+  assert.ok(!card.includes('PRIVATE KEY'), 'a CA card never prints the key');
+
+  const inBrowser = render('renderSavedCa(__data)', { ...checked, id: 'x', name: 'Local', createdAt: new Date().toISOString(), where: 'browser' });
+  assert.match(inBrowser, /This browser/);
+  const expired = render('renderSavedCa(__data)', { ...checked, id: 'y', name: 'Old', notAfter: '2001-01-01T00:00:00.000Z', where: 'server' });
+  assert.match(expired, /Expired/);
+  assert.ok(!/data-action="ca-issue"/.test(expired), 'an expired CA cannot be offered for issuing');
+
+  const issued = await issueCertificate({ commonName: 'svc.test', sans: 'svc.test' }, input);
+  const html = render('renderIssued(__data, __extra)', issued, { title: 'Issued certificate', usage: 'leaf', notice: 'Saved to history as <b>svc</b>.' });
+  assert.match(html, /Saved to history as <b>svc<\/b>/);
+  assert.match(html, /svc\.test/);
+  assert.match(html, /data-kind="private"/, 'the new private key is offered for download');
+});
