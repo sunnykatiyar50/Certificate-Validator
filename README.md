@@ -26,7 +26,7 @@ A small web app for validating, decoding, converting and creating X.509 certific
 
 **Accounts and appearance**
 - Sign-in with an admin from `.env` plus regular users (see [Authentication](#authentication)).
-- Light, dark or system theme, on the login page and in the app.
+- An Auto / Light / Dark theme switch, on the login page and in the app, and a "What's new" popover with the release notes (hover the version at the bottom of the sidebar).
 
 **Local CA**
 - **Create a CA:** a root CA, or an intermediate signed by a CA you supply. Choose the algorithm, validity and path length. The CA key is returned once and never stored.
@@ -44,14 +44,16 @@ server.js        Express app and API routes
 lib/             certificate.js (parsing), analysis.js (chain/hostname/warnings),
                  liveCheck.js (live TLS fetch, SSRF protection), keygen.js (key generation),
                  auth.js (accounts, sessions), historyStore.js (per-user history in SQLite),
+                 changelog.js (release notes for the What's new popover),
                  bundle.js (reads PEM/DER/P7B/PFX/JKS input), convert.js + jks.js (format conversion),
                  decode.js (CSR/CRL/bundle decoding), match.js (key matching), ca.js (local CA, CSR creation),
                  sct.js (Certificate Transparency), rootStores.js (Apple/Chrome/Microsoft membership), keys.js
 trust-data/      root-stores.json and ct-logs.json (generated, see scripts/update-trust-data.js)
 public/          static frontend (HTML/CSS/JS, login page), served by the server
 test/            tests (node:test)
-scripts/         release.js (version bump + tag), hash-password.js (password hashes, session secret),
+scripts/         release.js (release notes + version bump + tag), hash-password.js (password hashes, session secret),
                  update-trust-data.js (refresh trust-data/)
+CHANGELOG.md     release notes (shown in the app)
 Dockerfile, docker-compose.yml, .github/workflows/docker.yml
 ```
 
@@ -198,16 +200,19 @@ The version lives in one place: `package.json`. It is shown in the app footer an
 
 To publish a new version:
 
-1. Merge your changes to `main` and update your local copy:
+1. Write the release notes in `CHANGELOG.md` under `## Unreleased` (headings Added, Changed, Fixed, Security, Breaking; short bullets for users; `**bold**` and `code` work). Do this in the pull request that makes the change, so the notes are merged along with it.
+2. Merge your changes to `main` and update your local copy:
    ```bash
    git checkout main
    git pull
    ```
-2. Release. The script bumps the version, commits, tags, and publishes the commit and the tag in one atomic push:
+3. Release. The script moves the Unreleased notes under the new version, bumps the version, commits, tags, and publishes the commit and the tag in one atomic push:
    ```bash
    node scripts/release.js patch --push    # or minor / major / x.y.z. Use --show to print the current version.
    ```
-   Without `--push` it stops after tagging and prints the command to run yourself: `git push --atomic origin main vX.Y.Z`.
+   Without `--push` it stops after tagging and prints the command to run yourself: `git push --atomic origin main vX.Y.Z`. The script refuses a release with no notes under Unreleased; `--no-notes` skips that.
+
+The newest notes appear in the app: hover (or tap) the version at the bottom of the sidebar to see "What's new", with earlier releases below.
 
 The script refuses to release unless you are on `main`, the working tree is clean, `main` is exactly level with `origin/main` (not behind or ahead), and the tag does not already exist locally or on GitHub. That keeps a stale checkout from publishing an old build under a new version number. Always push the commit and the tag together (`--atomic`): pushed separately, git can reject the branch yet still publish the tag.
 

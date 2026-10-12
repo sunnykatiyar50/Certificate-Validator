@@ -9,6 +9,7 @@ const { fetchServerChain, LiveCheckError } = require('./lib/liveCheck');
 const { generateKeyPair, listAlgorithms, KeygenError } = require('./lib/keygen');
 const { AuthConfigError, loadAuthConfig, createAuth } = require('./lib/auth');
 const { HistoryStore, HistoryError } = require('./lib/historyStore');
+const { loadReleaseNotes } = require('./lib/changelog');
 const { InputError } = require('./lib/bundle');
 const { KeyError } = require('./lib/keys');
 const { JksError } = require('./lib/jks');
@@ -228,6 +229,11 @@ function createApp({
       const status = err instanceof LiveCheckError ? 400 : 500;
       res.status(status).json({ certs: [], error: err instanceof LiveCheckError ? err.message : 'Live check failed.' });
     }
+  });
+
+  // Release notes for the "what's new" popover, from CHANGELOG.md.
+  app.get('/api/release-notes', auth.requireAuth, (req, res) => {
+    res.json({ version: APP_VERSION, releases: loadReleaseNotes() });
   });
 
   app.get('/api/algorithms', auth.requireAuth, (req, res) => res.json({ algorithms: listAlgorithms() }));

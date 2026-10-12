@@ -22,6 +22,8 @@ const ENV = {
 
 const git = (cwd, ...args) => execFileSync('git', args, { cwd, env: ENV, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 
+const CHANGELOG = '# Changelog\n\nIntro text.\n\n## Unreleased\n\n### Added\n- A new thing\n  that wraps onto a second line\n\n### Fixed\n- A bug\n\n## 1.0.0 - 2026-01-01\n\n### Added\n- First release\n';
+
 // A bare "GitHub", the maintainer's clone with the script, and a teammate's clone.
 function sandbox(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'release-test-'));
@@ -36,6 +38,7 @@ function sandbox(t) {
   fs.copyFileSync(SCRIPT, path.join(work, 'scripts', 'release.js'));
   fs.writeFileSync(path.join(work, 'package.json'), JSON.stringify({ name: 'demo', version: '1.0.0' }, null, 2) + '\n');
   fs.writeFileSync(path.join(work, 'package-lock.json'), JSON.stringify({ name: 'demo', version: '1.0.0', lockfileVersion: 3, packages: { '': { name: 'demo', version: '1.0.0' } } }, null, 2) + '\n');
+  fs.writeFileSync(path.join(work, 'CHANGELOG.md'), CHANGELOG);
   git(work, 'add', '-A');
   git(work, 'commit', '-m', 'base');
   git(work, 'remote', 'add', 'origin', origin);
@@ -206,4 +209,80 @@ test('--push that fails publishes nothing and explains how to recover', t => {
   assert.match(result.stderr, /nothing was published/);
   assert.match(result.stderr, /git tag -d v1\.0\.1/);
   assert.deepEqual(s.remoteTags(), []);
+});
+
+// ---------- release notes (CHANGELOG.md) ----------
+
+const changelog = s => fs.readFileSync(path.join(s.work, 'CHANGELOG.md'), 'utf8');
+const today = () => new Date().toISOString().slice(0, 10);
+
+test('the release moves the Unreleased notes under the new version and keeps older notes', t => {
+  const s = sandbox(t);
+  const result = s.release('minor');
+  assert.equal(result.status, 0, result.stderr);
+  const text = changelog(s);
+  assert.match(text, new RegExp(`## Unreleased\n\n## 1\.1\.0 - ${today()}\n\n### Added\n- A new thing\n  that wraps onto a second line\n\n### Fixed\n- A bug\n\n## 1\.0\.0 - 2026-01-01`));
+  assert.ok(text.startsWith('# Changelog\n\nIntro text.\n'), 'text above Unreleased is kept');
+  assert.ok(text.endsWith('- First release\n'), 'older releases are untouched');
+  assert.equal(text.match(/## Unreleased/g).length, 1, 'one fresh Unreleased section');
+  // The notes are part of the release commit, so the tagged commit carries them.
+  assert.deepEqual(git(s.work, 'show', '--name-only', '--format=', 'v1.1.0^{commit}').split('\n').sort(), ['CHANGELOG.md', 'package-lock.json', 'package.json']);
+  assert.match(git(s.work, 'show', 'v1.1.0:CHANGELOG.md'), /## 1\.1\.0 - /);
+});
+
+test('REFUSES to release when there are no notes under Unreleased', t => {
+  const s = sandbox(t);
+  fs.writeFileSync(path.join(s.work, 'CHANGELOG.md'), '# Changelog\n\n## Unreleased\n\n## 1.0.0 - 2026-01-01\n\n### Added\n- First release\n');
+  git(s.work, 'commit', '-am', 'empty notes');
+  git(s.work, 'push', 'origin', 'main');
+  const result = s.release('patch');
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /no release notes under "## Unreleased"/);
+  assert.match(result.stderr, /--no-notes/);
+  assert.equal(s.version(), '1.0.0', 'nothing changed');
+  assert.equal(git(s.work, 'tag', '--list'), '');
+  assert.equal(git(s.work, 'status', '--porcelain'), '', 'working tree untouched');
+});
+
+test('REFUSES when Unreleased has a heading but no bullets, or the section is missing', t => {
+  for (const text of ['# Changelog\n\n## Unreleased\n\n### Added\n\n## 1.0.0 - 2026-01-01\n- x\n', '# Changelog\n\n## 1.0.0 - 2026-01-01\n- x\n']) {
+    const s = sandbox(t);
+    fs.writeFileSync(path.join(s.work, 'CHANGELOG.md'), text);
+    git(s.work, 'commit', '-am', 'notes');
+    git(s.work, 'push', 'origin', 'main');
+    assert.equal(s.release('patch').status, 1, text);
+  }
+});
+
+test('--no-notes releases without touching the changelog', t => {
+  const s = sandbox(t);
+  fs.writeFileSync(path.join(s.work, 'CHANGELOG.md'), '# Changelog\n\n## Unreleased\n');
+  git(s.work, 'commit', '-am', 'empty');
+  git(s.work, 'push', 'origin', 'main');
+  const result = s.release('patch', '--no-notes');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(changelog(s), '# Changelog\n\n## Unreleased\n');
+  assert.deepEqual(git(s.work, 'show', '--name-only', '--format=', 'v1.0.1^{commit}').split('\n').sort(), ['package-lock.json', 'package.json']);
+});
+
+test('REFUSES when CHANGELOG.md is missing (unless --no-notes)', t => {
+  const s = sandbox(t);
+  git(s.work, 'rm', '-q', 'CHANGELOG.md');
+  git(s.work, 'commit', '-m', 'remove changelog');
+  git(s.work, 'push', 'origin', 'main');
+  const result = s.release('patch');
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /CHANGELOG\.md was not found/);
+  assert.equal(s.release('patch', '--no-notes').status, 0);
+});
+
+test('keeps Windows line endings in the changelog', t => {
+  const s = sandbox(t);
+  fs.writeFileSync(path.join(s.work, 'CHANGELOG.md'), CHANGELOG.replace(/\n/g, '\r\n'));
+  git(s.work, '-c', 'core.autocrlf=false', 'commit', '-am', 'crlf');
+  git(s.work, 'push', 'origin', 'main');
+  assert.equal(s.release('patch').status, 0);
+  const text = changelog(s);
+  assert.ok(text.includes('## 1.0.1 - '));
+  assert.ok(!/[^\r]\n/.test(text), 'every line ending is still CRLF');
 });

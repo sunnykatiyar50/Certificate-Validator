@@ -1,10 +1,14 @@
 #!/usr/bin/env node
 // Bump the app version, commit it and tag it. The pushed tag triggers the Docker image release.
 //
-//   node scripts/release.js patch|minor|major|<x.y.z> [--push]
+//   node scripts/release.js patch|minor|major|<x.y.z> [--push] [--no-notes]
 //   node scripts/release.js --show        print the current version
 //
 // package.json (repo root) is the single source of truth for the version.
+//
+// Release notes live in CHANGELOG.md. Write them under "## Unreleased" as you work (merged to main);
+// the release moves them under the new version heading and starts a fresh Unreleased section.
+// A release with no notes is refused unless you pass --no-notes. The notes are shown in the app.
 //
 // A release is built from the tagged commit, so the script only runs from `main` when it is exactly
 // level with `origin/main` and the tree is clean. It never tags a stale or unpushed commit.
@@ -17,6 +21,7 @@ const path = require('path');
 const root = path.join(__dirname, '..');
 const pkgPath = path.join(root, 'package.json');
 const lockPath = path.join(root, 'package-lock.json');
+const changelogPath = path.join(root, 'CHANGELOG.md');
 const RELEASE_BRANCH = 'main';
 const REMOTE = 'origin';
 
@@ -68,8 +73,25 @@ function checkReleasable(tag) {
   if (git('ls-remote', '--tags', REMOTE, `refs/tags/${tag}`)) fail(`Tag ${tag} already exists on ${REMOTE}. Pick a new version.`);
 }
 
+// Move the "## Unreleased" notes under "## <version> - <date>" and leave a fresh, empty Unreleased section.
+// Returns the new text, or null when there are no notes (no bullet under Unreleased).
+function promoteUnreleased(text, version, date) {
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const lines = text.replace(/\r\n/g, '\n').split('\n');
+  const start = lines.findIndex(line => /^##\s+\[?unreleased\]?\s*$/i.test(line));
+  if (start < 0) return null;
+  let end = lines.findIndex((line, i) => i > start && /^##\s/.test(line));
+  if (end < 0) end = lines.length;
+  if (!lines.slice(start + 1, end).some(line => /^[-*]\s+\S/.test(line))) return null;
+  const body = lines.slice(start + 1, end);
+  while (body.length && body[body.length - 1].trim() === '') body.pop();
+  const out = [...lines.slice(0, start), '## Unreleased', '', `## ${version} - ${date}`, ...body, '', ...lines.slice(end)];
+  return out.join('\n').replace(/\n+$/, '\n').replace(/\n/g, eol);
+}
+
 const args = process.argv.slice(2);
 const push = args.includes('--push');
+const skipNotes = args.includes('--no-notes');
 const bump = args.find(a => !a.startsWith('--'));
 const pkg = readJson(pkgPath);
 
@@ -78,7 +100,7 @@ if (args.includes('--show')) {
   process.exit(0);
 }
 if (!bump || !/^(major|minor|patch|\d+\.\d+\.\d+)$/.test(bump)) {
-  fail('Usage: node scripts/release.js <patch|minor|major|x.y.z> [--push] | --show');
+  fail('Usage: node scripts/release.js <patch|minor|major|x.y.z> [--push] [--no-notes] | --show');
 }
 
 const previous = pkg.data.version;
@@ -86,6 +108,16 @@ const version = nextVersion(previous, bump);
 const tag = `v${version}`;
 if (version === previous) fail(`Version is already ${version}.`);
 checkReleasable(tag);
+
+// Release notes are checked before any file is touched.
+let changelogText = null;
+if (!skipNotes) {
+  if (!fs.existsSync(changelogPath)) fail('CHANGELOG.md was not found. Add it, or release without notes: --no-notes');
+  changelogText = promoteUnreleased(fs.readFileSync(changelogPath, 'utf8'), version, new Date().toISOString().slice(0, 10));
+  if (changelogText === null) {
+    fail('There are no release notes under "## Unreleased" in CHANGELOG.md.\nAdd a few bullets (Added / Changed / Fixed) describing this release, merge them to main, pull, and run the release again.\n(Use --no-notes to release without notes.)');
+  }
+}
 
 pkg.data.version = version;
 writeJson(pkgPath, pkg);
@@ -96,6 +128,11 @@ if (fs.existsSync(lockPath)) {
   if (lock.data.packages && lock.data.packages['']) lock.data.packages[''].version = version;
   writeJson(lockPath, lock);
   files.push('package-lock.json');
+}
+
+if (changelogText !== null) {
+  fs.writeFileSync(changelogPath, changelogText);
+  files.push('CHANGELOG.md');
 }
 
 git('add', ...files);

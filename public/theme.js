@@ -1,8 +1,9 @@
 // Light / dark / system theme. Loaded in <head> so the saved theme applies before first paint.
+// The switch (data-theme-set buttons) shows which of Auto / Light / Dark is selected, so it is always
+// clear what a click will do. "Auto" follows the operating system setting.
 (function () {
   var KEY = 'cv-theme';
   var MODES = ['system', 'light', 'dark'];
-  var LABELS = { system: '◐ System theme', light: '☀ Light theme', dark: '☾ Dark theme' };
 
   function stored() {
     try {
@@ -19,24 +20,35 @@
     else root.removeAttribute('data-theme');
   }
 
-  function updateLabels() {
-    var label = LABELS[stored()];
-    document.querySelectorAll('[data-theme-toggle]').forEach(function (button) {
-      button.textContent = label;
-      button.title = 'Change theme';
+  // Mark the selected button in every switch on the page.
+  function updateSwitches() {
+    var mode = stored();
+    document.querySelectorAll('[data-theme-set]').forEach(function (button) {
+      var active = button.getAttribute('data-theme-set') === mode;
+      button.setAttribute('aria-pressed', String(active));
+      button.classList.toggle('active', active);
     });
   }
 
   apply(stored());
 
   document.addEventListener('click', function (event) {
-    var button = event.target.closest('[data-theme-toggle]');
+    var button = event.target.closest('[data-theme-set]');
     if (!button) return;
-    var next = MODES[(MODES.indexOf(stored()) + 1) % MODES.length];
-    try { localStorage.setItem(KEY, next); } catch (e) { /* the choice just will not persist */ }
-    apply(next);
-    updateLabels();
+    var mode = button.getAttribute('data-theme-set');
+    if (MODES.indexOf(mode) < 0) return;
+    try { localStorage.setItem(KEY, mode); } catch (e) { /* the choice just will not persist */ }
+    apply(mode);
+    updateSwitches();
   });
 
-  document.addEventListener('DOMContentLoaded', updateLabels);
+  // Keep several open tabs in step.
+  window.addEventListener('storage', function (event) {
+    if (event.key === KEY) {
+      apply(stored());
+      updateSwitches();
+    }
+  });
+
+  document.addEventListener('DOMContentLoaded', updateSwitches);
 })();

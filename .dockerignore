@@ -11,4 +11,5 @@ data
 docker-compose.yml
 Dockerfile
 *.md
+!CHANGELOG.md
 *.log
