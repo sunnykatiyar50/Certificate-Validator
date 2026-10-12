@@ -6,6 +6,8 @@ Add your notes under **Unreleased** as you work. `node scripts/release.js` moves
 
 ## Unreleased
 
+## 2.2.0 - 2026-10-12
+
 ### Added
 - **What's new:** hover (or tap) the version at the bottom of the sidebar to read the release notes for the current version, with earlier releases below.
 - A clear **Auto / Light / Dark** theme switch that shows which option is selected, on the login page too.
