@@ -6,6 +6,8 @@ Add your notes under **Unreleased** as you work. `node scripts/release.js` moves
 
 ## Unreleased
 
+## 2.3.1 - 2026-10-12
+
 ### Added
 - A **favicon** for the app and the login page.
 
