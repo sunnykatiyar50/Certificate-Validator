@@ -1,6 +1,6 @@
-# Certificate Validator
+# Certificate Workbench
 
-A small web app for validating X.509 certificates and generating key pairs, behind a sign-in with an admin and regular users.
+A small web app for validating, decoding, converting and creating X.509 certificates, keys and CSRs, behind a sign-in with an admin and regular users.
 
 ## Features
 
@@ -11,15 +11,28 @@ A small web app for validating X.509 certificates and generating key pairs, behi
 - **Live site check:** enter `example.com` (and optionally a port) and the server fetches the certificate chain it presents, plus the TLS version and cipher.
 - **Warnings:** weak RSA keys, SHA-1/MD5 signatures, certificates expiring within 30 days, self-signed leaves, and validity periods over 398 days.
 
+**Inspect**
+- **Decode CSRs:** subject, public key, requested SANs, key usage and extensions, and whether the request's signature verifies.
+- **Decode CRLs:** issuer, dates, CRL number, signature check against an issuer certificate you supply, and every revoked serial. Add certificates next to the CRL to see which of them are listed.
+- **Decode bundles:** PKCS#7 / P7B, PEM bundles, PFX/P12 and JKS keystores are unpacked into the certificate report. Private keys are only described, never displayed.
+
 **Create**
 - **Generate keys:** create a key pair with a self-signed certificate, a CSR, or keys only. Supports RSA 2048/3072/4096, ECDSA P-256/P-384/P-521 and Ed25519, with SHA-256/384/512, SANs, subject fields, validity and a CA option. Results can be copied, downloaded as PEM, or sent straight to the validator.
 - **History:** generated key pairs are saved under a name (rename or delete any time). Users see only their own history and the admin sees everyone's. The server stores the certificate, CSR, public key and details, but never a private key: if you choose to keep one, it stays in your browser only (unencrypted).
+- **CSR from an existing key:** build a CSR for a key you already have (PEM, PFX or JKS), optionally copying the subject and names from the certificate you are renewing.
 
 **Accounts and appearance**
 - Sign-in with an admin from `.env` plus regular users (see [Authentication](#authentication)).
 - Light, dark or system theme, on the login page and in the app.
 
-Not covered yet: revocation checking (CRL/OCSP).
+**Local CA**
+- **Create a CA:** a root CA, or an intermediate signed by a CA you supply. Choose the algorithm, validity and path length. The CA key is returned once and never stored.
+- **Sign a CSR:** issue a TLS server, TLS client or intermediate-CA certificate from a CSR with your CA. Names are copied from the CSR (or added), validity is limited to the CA's lifetime, and the result comes with the CA chain. The CA key is sent to the server for the request, held in memory and discarded.
+
+**Convert**
+- Convert between **PEM, DER, PKCS#7 (P7B), PFX/PKCS#12 and JKS**. Paste or upload the certificate, chain and key in any order and any mix; the chain is ordered leaf-first and the key is checked against the leaf. PFX files can use AES-256 or legacy 3DES for old Windows and Java; PEM private keys can be encrypted. RSA, ECDSA and Ed25519 keys are supported. CSRs and CRLs convert between PEM and DER.
+
+Not covered yet: fetching revocation data online (OCSP, CRL downloads). A CRL you supply can be decoded and checked against certificates.
 
 ## Project structure
 
@@ -27,7 +40,9 @@ Not covered yet: revocation checking (CRL/OCSP).
 server.js        Express app and API routes
 lib/             certificate.js (parsing), analysis.js (chain/hostname/warnings),
                  liveCheck.js (live TLS fetch, SSRF protection), keygen.js (key generation),
-                 auth.js (accounts, sessions), historyStore.js (per-user history in SQLite)
+                 auth.js (accounts, sessions), historyStore.js (per-user history in SQLite),
+                 bundle.js (reads PEM/DER/P7B/PFX/JKS input), convert.js + jks.js (format conversion),
+                 decode.js (CSR/CRL/bundle decoding), ca.js (local CA, CSR creation), keys.js
 public/          static frontend (HTML/CSS/JS, login page), served by the server
 test/            tests (node:test)
 scripts/         release.js (version bump + tag), hash-password.js (password hashes, session secret)
@@ -93,9 +108,9 @@ $env:APP_VERSION = "1.1.1"; docker compose up -d
 Remove-Item Env:APP_VERSION   # clear it afterwards
 ```
 
-You can also keep the settings in a `.env` file next to `docker-compose.yml`: copy `sample.env` to `.env` and edit it (for example `APP_VERSION=1.1.1`). Then plain `docker compose up -d` is enough. The container is named `cert-validator`, so you can use `docker logs cert-validator` and `docker stop cert-validator`.
+You can also keep the settings in a `.env` file next to `docker-compose.yml`: copy `sample.env` to `.env` and edit it (for example `APP_VERSION=1.1.1`). Then plain `docker compose up -d` is enough. The container is named `cert-workbench`, so you can use `docker logs cert-workbench` and `docker stop cert-workbench`.
 
-The app is then at [http://localhost:33003](http://localhost:33003). Compose settings: `ADMIN_PASSWORD` and `SESSION_SECRET` are required; `ADMIN_USERNAME`, `USERS`, `SESSION_TTL_HOURS`, `APP_VERSION`, `HOST_PORT` (default `33003`), `TRUST_PROXY` and `CORS_ORIGIN` are optional. The container runs as a non-root user with a read-only filesystem and has a `/healthz` health check. The history database is kept in the `cert-validator-data` volume (mounted at `/app/data`), so it survives restarts and upgrades.
+The app is then at [http://localhost:33003](http://localhost:33003). Compose settings: `ADMIN_PASSWORD` and `SESSION_SECRET` are required; `ADMIN_USERNAME`, `USERS`, `SESSION_TTL_HOURS`, `APP_VERSION`, `HOST_PORT` (default `33003`), `TRUST_PROXY` and `CORS_ORIGIN` are optional. The container runs as a non-root user with a read-only filesystem and has a `/healthz` health check. The history database is kept in the `cert-workbench-data` volume (mounted at `/app/data`), so it survives restarts and upgrades.
 
 If pulling the image is denied, the package is still private: make it public in the repository's Packages settings, or run `docker login ghcr.io`.
 
@@ -115,7 +130,7 @@ Every page and API (except `/healthz`, `/api/version` and the login page) needs 
 The server refuses to start, and logs what is wrong, if a required value is missing, too short, or still a `change-me` placeholder.
 
 - **Roles:** the admin and users can use every feature. In History, users see only their own items; the admin sees everyone's and can filter by user, rename or delete any item.
-- **Hashed passwords:** instead of plain text you can store a hash: `npm run hash-password` prompts for a password and prints a value to use for `ADMIN_PASSWORD` or in `USERS=name:hash`. With Docker: `docker run --rm -it ghcr.io/sunnykatiyar50/certificate-validator node scripts/hash-password.js`. Generate a `SESSION_SECRET` with `npm run hash-password -- --secret`.
+- **Hashed passwords:** instead of plain text you can store a hash: `npm run hash-password` prompts for a password and prints a value to use for `ADMIN_PASSWORD` or in `USERS=name:hash`. With Docker: `docker run --rm -it ghcr.io/sunnykatiyar50/certificate-workbench node scripts/hash-password.js`. Generate a `SESSION_SECRET` with `npm run hash-password -- --secret`.
 - **Sessions:** a signed cookie (`HttpOnly`, `SameSite=Strict`, `Secure` when served over HTTPS, so set `TRUST_PROXY` behind a TLS proxy). Changing a user's password, removing the user, or changing `SESSION_SECRET` signs them out. Sign-out only clears the browser's cookie; a stolen cookie stays valid until it expires.
 - **Protections:** failed sign-ins are limited to 10 per 15 minutes per address, state-changing requests need an `X-Requested-With` header (CSRF), and responses carry a strict Content-Security-Policy.
 - **Private keys:** the server never stores them. If you keep one with a history item, it is saved in that browser only, per user, unencrypted.
@@ -142,10 +157,19 @@ Uploads are limited to 1 MB and the supported extensions, are processed in memor
 | `POST /api/validate-certificate` | Multipart form: `certificate` (file) or `certText`, plus optional `password` and `hostname` |
 | `POST /api/check-host` | JSON `{ "host": "example.com", "port": 443 }`: fetch and analyse a server's chain |
 | `POST /api/generate-keypair` | JSON options (`algorithm`, `output`, `commonName`, `sans`, `hash`, `validityDays`, ...): returns the keys and certificate or CSR. Nothing is stored. |
+| `POST /api/decode` | Multipart: `files` and/or `text` (CSR, CRL, P7B, PEM, PFX, JKS), optional `password` |
+| `POST /api/convert` | Multipart: `files` and/or `text`, `format` (`pem`, `der`, `p7b`, `pfx`, `jks`), `password`, `outputPassword`, `alias`, `legacy` |
+| `POST /api/csr/create` | Multipart: `key` file or `keyText`, `keyPassword`, optional `cert`/`certText`, `commonName`, `sans`, `hash`, subject fields |
+| `POST /api/ca/create` | Multipart: `commonName`, `algorithm`, `hash`, `validityDays`, `pathLength`, subject fields; for an intermediate also `issuer` file or `issuerText` and `issuerPassword` |
+| `POST /api/ca/sign` | Multipart: `csr` file or `csrText`, `ca` file or `caText` (certificate + key), `caPassword`, `usage` (`server`, `client`, `both`, `ca`), `validityDays`, `sans`, `copySans`, `hash` |
 | `GET /api/algorithms` | Supported key algorithms |
 | `GET/POST/DELETE /api/history`, `PATCH/DELETE /api/history/:id` | The caller's history (admins: everyone's, `?owner=` filters). Private keys are rejected. |
 | `GET /api/version` | Running version (public) |
 | `GET /healthz` | Health check (public) |
+
+## Private keys
+
+Endpoints that take private keys (convert, CSR creation, signing) process them in memory, send `Cache-Control: no-store`, and never log them.
 
 ## Tests
 
@@ -173,7 +197,7 @@ The GitHub Actions workflow (`.github/workflows/docker.yml`) runs the tests, the
 
 | Event | Result |
 | --- | --- |
-| Tag `vX.Y.Z` | Publishes `ghcr.io/<owner>/certificate-validator` as `X.Y.Z`, `X.Y` and `latest` (fails if the tag does not match `package.json`) |
+| Tag `vX.Y.Z` | Publishes `ghcr.io/<owner>/certificate-workbench` as `X.Y.Z`, `X.Y` and `latest` (fails if the tag does not match `package.json`) |
 | Push to `main` | Publishes `latest`, `edge` and `sha-<commit>` (no version tag) |
 | Pull request | Tests and builds only, nothing is published |
 

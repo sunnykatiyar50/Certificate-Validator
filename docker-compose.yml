@@ -5,9 +5,9 @@
 # APP_VERSION selects the image tag and is stamped into the build. It defaults to "latest".
 # Find the current version with: node scripts/release.js --show
 services:
-  certificate-validator:
-    container_name: cert-validator
-    image: ghcr.io/sunnykatiyar50/certificate-validator:${APP_VERSION:-latest}
+  certificate-workbench:
+    container_name: cert-workbench
+    image: ghcr.io/sunnykatiyar50/certificate-workbench:${APP_VERSION:-latest}
     build:
       context: .
       args:
@@ -27,7 +27,7 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN:-}
     volumes:
       # User history database (the root filesystem is read-only).
-      - cert-validator-data:/app/data
+      - cert-workbench-data:/app/data
     restart: unless-stopped
     read_only: true
     cap_drop:
@@ -36,4 +36,4 @@ services:
       - no-new-privileges:true
 
 volumes:
-  cert-validator-data:
+  cert-workbench-data:

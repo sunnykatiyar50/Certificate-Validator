@@ -638,11 +638,44 @@ document.addEventListener('click', async e => {
     link.click();
     URL.revokeObjectURL(url);
   } else if (action === 'validate') {
-    const pem = btn.closest('.cert').querySelector('[data-kind="certificate"] pre').textContent;
-    $('certText').value = pem;
+    const card = btn.closest('.cert');
+    const block = card.querySelector('[data-kind="fullchain"] pre') || card.querySelector('[data-kind="certificate"] pre');
+    $('certText').value = block.textContent;
     $('textHostname').value = '';
     showView('text');
     $('textForm').requestSubmit();
+  } else if (action === 'clear') {
+    clearForm(btn.dataset.ids.split(','), btn.dataset.out);
+  } else if (action === 'copy-b64') {
+    try {
+      await navigator.clipboard.writeText(binaryDownloads.get(id).content);
+      flash(btn, 'Copied');
+    } catch (err) {
+      flash(btn, 'Copy failed');
+    }
+  } else if (action === 'download-b64') {
+    const f = binaryDownloads.get(id);
+    if (f) saveBlob(base64ToBlob(f.content, f.mime), f.name);
+  } else if (action === 'decode-csr') {
+    $('decodeText').value = btn.closest('.cert').querySelector('[data-kind="csr"] pre').textContent;
+    showView('decode');
+    $('decodeForm').requestSubmit();
+  } else if (action === 'sign-csr') {
+    $('signCsrText').value = btn.closest('.cert').querySelector('[data-kind="csr"] pre').textContent;
+    showView('ca-sign');
+  } else if (action === 'use-ca' || action === 'intermediate-from-ca') {
+    const card = btn.closest('.cert');
+    const pair = card.querySelector('[data-kind="certificate"] pre').textContent + card.querySelector('[data-kind="private"] pre').textContent;
+    if (action === 'use-ca') {
+      $('signCaText').value = pair;
+      showView('ca-sign');
+    } else {
+      $('caKind').value = 'intermediate';
+      $('caKind').dispatchEvent(new Event('change'));
+      $('caParentText').value = pair;
+      $('caCommonName').value = '';
+      showView('ca-create');
+    }
   } else if (action === 'select') {
     selectedHistoryId = id;
     drawHistory();
@@ -674,6 +707,351 @@ document.addEventListener('click', async e => {
     importLegacyHistory(btn);
   }
 });
+
+// ---------- tools: shared helpers ----------
+
+// Add the files chosen in `fileInputId` and any pasted text to a FormData under the given field names.
+function appendInputs(fd, fileInputId, fileField, textId, textField) {
+  for (const file of $(fileInputId).files) fd.append(fileField, file);
+  const text = $(textId).value.trim();
+  if (text) fd.append(textField, text);
+}
+
+function appendIf(fd, name, value) {
+  const v = typeof value === 'string' ? value.trim() : value;
+  if (v !== undefined && v !== null && v !== '') fd.append(name, v);
+}
+
+function hasInput(fileInputId, textId) {
+  return $(fileInputId).files.length > 0 || $(textId).value.trim() !== '';
+}
+
+async function postTool(url, formData, out, render, submit) {
+  out.textContent = 'Working...';
+  if (submit) submit.disabled = true;
+  try {
+    const response = await api(url, { method: 'POST', body: formData });
+    const data = await response.json();
+    if (!response.ok || data.error) return showError(out, data.error || 'The request failed.');
+    out.innerHTML = render(data);
+  } catch (err) {
+    showError(out, err.message === 'Failed to fetch' ? 'Request failed. Is the server running?' : err.message);
+  } finally {
+    if (submit) submit.disabled = false;
+  }
+}
+
+const toolWarnings = list => (list && list.length)
+  ? renderWarnings(list.map(message => ({ level: 'warning', message })))
+  : '';
+
+// Binary results (PFX, JKS, DER) are kept here so a download button can find them by id.
+const binaryDownloads = new Map();
+
+function base64ToBlob(b64, mime) {
+  const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  return new Blob([bytes], { type: mime || 'application/octet-stream' });
+}
+
+function saveBlob(blob, filename) {
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function humanSize(bytes) {
+  return bytes < 1024 ? `${bytes} bytes` : `${(bytes / 1024).toFixed(1)} KB`;
+}
+
+function renderFiles(files) {
+  return `<div class="pem-list">${files.map(f => {
+    const note = f.note ? `<div class="muted file-note">${escapeHtml(f.note)}</div>` : '';
+    if (f.encoding === 'text') {
+      const secret = /private-key/.test(f.name);
+      return note + pemBlock(f.name, f.content, f.name, { secret, kind: f.name.replace(/\.[^.]+$/, '') });
+    }
+    const id = newId();
+    binaryDownloads.set(id, f);
+    const size = humanSize(Math.floor(f.content.length * 3 / 4));
+    return `<div class="pem-block${/keystore|\.pfx|private-key/.test(f.name) ? ' secret' : ''}">
+      <div class="pem-head">
+        <span><b>${escapeHtml(f.name)}</b> ${badge('info', size)}</span>
+        <span class="pem-actions">
+          <button type="button" class="btn small" data-action="copy-b64" data-id="${id}">Copy base64</button>
+          <button type="button" class="btn small primary" data-action="download-b64" data-id="${id}">Download</button>
+        </span>
+      </div>
+      <div class="file-note muted">${escapeHtml(f.note || 'Binary file.')}</div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+// ---------- decode (CSR / CRL / bundles) ----------
+
+function renderCsrDecoded(c) {
+  const unknown = '<span class="muted">Unknown</span>';
+  const basic = c.basicConstraints ? `CA: ${c.basicConstraints.ca ? 'yes' : 'no'}${c.basicConstraints.pathLength !== null ? `, path length ${c.basicConstraints.pathLength}` : ''}` : '';
+  return `<div class="cert">
+    <div class="cert-header">
+      <div class="cert-title">Certificate signing request ${badge('info', c.publicKey)}</div>
+      <div class="cert-status ${c.signatureValid ? 'ok' : 'bad'}">${c.signatureValid ? '&#10003; Signature valid' : '&#10007; Signature invalid'}</div>
+    </div>
+    ${renderWarnings(c.warnings)}
+    <div class="sections">
+    ${section('Identity', [
+      row('Subject', renderName(c.subject))
+    ])}
+    ${section('Key and signature', [
+      row('Public key', escapeHtml(c.publicKey)),
+      row('Signature algorithm', escapeHtml(c.signatureAlgorithm) || unknown),
+      row('Key ID (SHA-256)', escapeHtml(c.keyId), { mono: true })
+    ])}
+    ${section('Requested', [
+      row('Subject alt names', chips((c.sans || []).map(s => `${s.type}: ${s.value}`))),
+      row('Key usage', chips(c.keyUsage || [])),
+      row('Extended key usage', chips(c.extKeyUsage || [])),
+      row('Basic constraints', escapeHtml(basic)),
+      row('All extensions', chips((c.requestedExtensions || []).map(e => e.name || e.oid)))
+    ])}
+    ${section('Fingerprint', [row('SHA-256', escapeHtml(c.fingerprintSha256), { mono: true })])}
+    </div>
+  </div>`;
+}
+
+function renderCrlDecoded(c) {
+  const sigBadge = { valid: badge('good', 'Signature valid'), invalid: badge('bad', 'Signature invalid'), unchecked: badge('info', 'Signature not checked') }[c.signature];
+  const status = c.expired === null ? '' : c.expired ? badge('warn', 'Past next update') : badge('good', 'Current');
+  const entries = (c.entries || []).map(e => `<tr><td class="mono">${escapeHtml(e.serialNumber)}</td><td>${escapeHtml(formatDate(e.revocationDate))}</td><td>${escapeHtml(e.reason || '')}</td></tr>`).join('');
+  const certStatus = (c.certificateStatus || []).map(s => `<li>${s.revoked ? badge('bad', 'Revoked') : badge('good', 'Not on this CRL')} ${escapeHtml(s.subject)}${s.revoked ? ` <span class="muted">(${escapeHtml(formatDate(s.revocationDate))}${s.reason ? ', ' + escapeHtml(s.reason) : ''})</span>` : ''}</li>`).join('');
+  return `<div class="cert">
+    <div class="cert-header">
+      <div class="cert-title">Certificate revocation list ${c.delta ? badge('info', 'Delta CRL') : ''} ${status}</div>
+      <div class="cert-status">${sigBadge}</div>
+    </div>
+    ${renderWarnings(c.warnings)}
+    <div class="sections">
+    ${section('Issuer and dates', [
+      row('Issuer', renderName(c.issuer)),
+      row('This update', escapeHtml(formatDate(c.thisUpdate))),
+      row('Next update', escapeHtml(formatDate(c.nextUpdate)) || '<span class="muted">Not set</span>'),
+      row('CRL number', escapeHtml(c.crlNumber)),
+      row('Signature algorithm', escapeHtml(c.signatureAlgorithm))
+    ])}
+    ${section('Contents', [
+      row('Revoked certificates', escapeHtml(String(c.revokedCount))),
+      row('SHA-256', escapeHtml(c.fingerprintSha256), { mono: true })
+    ])}
+    </div>
+    ${certStatus ? `<div class="panel"><div class="panel-title">Certificates you supplied</div><ul class="warnings">${certStatus}</ul></div>` : ''}
+    ${entries ? `<div class="section"><div class="section-title">Revoked serial numbers${c.entriesTruncated ? ` (first ${c.entries.length} of ${c.revokedCount})` : ''}</div>
+      <div class="table-wrap"><table class="grid"><thead><tr><th>Serial</th><th>Revoked</th><th>Reason</th></tr></thead><tbody>${entries}</tbody></table></div></div>` : ''}
+  </div>`;
+}
+
+function renderDecode(data) {
+  let html = '';
+  if (data.notes && data.notes.length) html += `<div class="note-warn">${data.notes.map(escapeHtml).join(' ')}</div>`;
+  if (data.keystoreAliases && data.keystoreAliases.length) html += `<div class="panel muted">Keystore entries: ${escapeHtml(data.keystoreAliases.join(', '))}</div>`;
+  (data.privateKeys || []).forEach(k => {
+    html += `<div class="panel">${badge('warn', 'Private key')} A ${escapeHtml(k.description)} private key was found. It is not displayed.</div>`;
+  });
+  if (data.publicKeys) html += `<div class="panel muted">${data.publicKeys} public key${data.publicKeys === 1 ? '' : 's'} found.</div>`;
+  html += data.csrs.map(renderCsrDecoded).join('');
+  html += data.crls.map(renderCrlDecoded).join('');
+  if (data.certificates && data.certificates.certs.length) {
+    html += renderChain(data.certificates);
+    html += data.certificates.certs.map((cert, idx) => renderCert(cert, idx, data.certificates.certs)).join('');
+  }
+  return html || '<div class="panel error">Nothing recognisable was found.</div>';
+}
+
+$('decodeForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const out = $('result-decode');
+  if (!hasInput('decodeFiles', 'decodeText')) return showError(out, 'Choose a file or paste some text.');
+  const fd = new FormData();
+  appendInputs(fd, 'decodeFiles', 'files', 'decodeText', 'text');
+  appendIf(fd, 'password', $('decodePassword').value);
+  postTool('/api/decode', fd, out, renderDecode, e.submitter);
+});
+
+// ---------- CSR from an existing key ----------
+
+function renderCsrCreated(data) {
+  return `<div class="cert">
+    <div class="cert-header">
+      <div class="cert-title">Certificate signing request ${badge('info', data.algorithmLabel)}</div>
+      <div class="pem-actions">
+        <button type="button" class="btn small" data-action="decode-csr">Decode this CSR</button>
+        <button type="button" class="btn small primary" data-action="sign-csr">Sign with my CA</button>
+      </div>
+    </div>
+    ${section('Details', [
+      row('Subject', escapeHtml(data.subject)),
+      row('Subject alt names', chips(data.sans || []))
+    ])}
+    <div class="pem-list">${pemBlock('Certificate signing request', data.csrPem, 'request.csr', { kind: 'csr' })}</div>
+  </div>`;
+}
+
+$('csrForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const out = $('result-csr');
+  if (!hasInput('csrKeyFiles', 'csrKeyText')) return showError(out, 'Provide the private key.');
+  const fd = new FormData();
+  appendInputs(fd, 'csrKeyFiles', 'key', 'csrKeyText', 'keyText');
+  appendInputs(fd, 'csrCertFiles', 'cert', 'csrCertText', 'certText');
+  appendIf(fd, 'keyPassword', $('csrKeyPassword').value);
+  appendIf(fd, 'commonName', $('csrCommonName').value);
+  appendIf(fd, 'sans', $('csrSans').value);
+  appendIf(fd, 'hash', $('csrHash').value);
+  appendIf(fd, 'organization', $('csrOrg').value);
+  appendIf(fd, 'organizationalUnit', $('csrOu').value);
+  appendIf(fd, 'country', $('csrCountry').value);
+  appendIf(fd, 'state', $('csrState').value);
+  appendIf(fd, 'locality', $('csrLocality').value);
+  postTool('/api/csr/create', fd, out, renderCsrCreated, e.submitter);
+});
+
+// ---------- local CA ----------
+
+function renderIssued(data, { title, usage }) {
+  const actions = [];
+  if (usage === 'ca') {
+    actions.push('<button type="button" class="btn small primary" data-action="use-ca">Use to sign a CSR</button>');
+    actions.push('<button type="button" class="btn small" data-action="intermediate-from-ca">Create an intermediate</button>');
+  } else {
+    actions.push('<button type="button" class="btn small primary" data-action="validate">Validate this certificate</button>');
+  }
+  const base = slug(data.subject);
+  return `<div class="cert">
+    <div class="cert-header">
+      <div class="cert-title">${escapeHtml(title)} ${data.algorithmLabel ? badge('info', data.algorithmLabel) : ''}</div>
+      <div class="pem-actions">${actions.join('')}</div>
+    </div>
+    ${toolWarnings(data.warnings)}
+    ${section('Details', [
+      row('Subject', `<span class="rdn"><b>CN</b> ${escapeHtml(data.subject)}</span>`),
+      row('Issuer', escapeHtml(data.issuer) || '<span class="muted">Self-signed</span>'),
+      row('Subject alt names', chips(data.sans || [])),
+      row('Serial number', escapeHtml(data.serialNumber), { mono: true }),
+      row('Valid from', escapeHtml(formatDate(data.notBefore))),
+      row('Valid to', escapeHtml(formatDate(data.notAfter))),
+      row('Path length', data.pathLength === null || data.pathLength === undefined ? '' : escapeHtml(String(data.pathLength))),
+      row('SHA-256', escapeHtml(data.fingerprintSha256), { mono: true })
+    ])}
+    <div class="pem-list">
+      ${pemBlock('Certificate', data.certificatePem, `${base}-cert.pem`, { kind: 'certificate' })}
+      ${data.privateKeyPem ? pemBlock('Private key (PKCS#8)', data.privateKeyPem, `${base}-key.pem`, { secret: true, kind: 'private' }) : ''}
+      ${data.chainPem ? pemBlock(data.fullchainPem ? 'CA chain' : 'Chain (this certificate + parent CAs)', data.chainPem, `${base}-chain.pem`, { kind: 'chain' }) : ''}
+      ${data.fullchainPem ? pemBlock('Full chain (certificate + CA chain)', data.fullchainPem, `${base}-fullchain.pem`, { kind: 'fullchain' }) : ''}
+    </div>
+  </div>`;
+}
+
+$('caKind').addEventListener('change', () => {
+  const intermediate = $('caKind').value === 'intermediate';
+  $('caParent').hidden = !intermediate;
+  $('caValidity').value = intermediate ? 1825 : 3650;
+});
+
+$('caCreateForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const out = $('result-ca-create');
+  const intermediate = $('caKind').value === 'intermediate';
+  if (!$('caCommonName').value.trim()) return showError(out, 'Common name is required.');
+  if (intermediate && !hasInput('caParentFiles', 'caParentText')) return showError(out, 'Provide the parent CA certificate and private key.');
+  const fd = new FormData();
+  if (intermediate) {
+    appendInputs(fd, 'caParentFiles', 'issuer', 'caParentText', 'issuerText');
+    appendIf(fd, 'issuerPassword', $('caParentPassword').value);
+  }
+  appendIf(fd, 'commonName', $('caCommonName').value);
+  appendIf(fd, 'algorithm', $('caAlgorithm').value);
+  appendIf(fd, 'hash', $('caHash').value);
+  appendIf(fd, 'validityDays', $('caValidity').value);
+  appendIf(fd, 'pathLength', $('caPathLength').value);
+  appendIf(fd, 'organization', $('caOrg').value);
+  appendIf(fd, 'organizationalUnit', $('caOu').value);
+  appendIf(fd, 'country', $('caCountry').value);
+  appendIf(fd, 'state', $('caState').value);
+  appendIf(fd, 'locality', $('caLocality').value);
+  postTool('/api/ca/create', fd, out, d => renderIssued(d, { title: d.kind === 'root' ? 'Root CA' : 'Intermediate CA', usage: 'ca' }), e.submitter);
+});
+
+$('caSignForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const out = $('result-ca-sign');
+  if (!hasInput('signCsrFiles', 'signCsrText')) return showError(out, 'Provide the certificate signing request.');
+  if (!hasInput('signCaFiles', 'signCaText')) return showError(out, 'Provide the CA certificate and private key.');
+  const fd = new FormData();
+  appendInputs(fd, 'signCsrFiles', 'csr', 'signCsrText', 'csrText');
+  appendInputs(fd, 'signCaFiles', 'ca', 'signCaText', 'caText');
+  appendIf(fd, 'caPassword', $('signCaPassword').value);
+  appendIf(fd, 'usage', $('signUsage').value);
+  appendIf(fd, 'validityDays', $('signValidity').value);
+  appendIf(fd, 'sans', $('signSans').value);
+  appendIf(fd, 'hash', $('signHash').value);
+  fd.append('copySans', $('signCopySans').checked ? 'true' : 'false');
+  postTool('/api/ca/sign', fd, out, d => renderIssued(d, { title: d.kind === 'intermediate' ? 'Signed intermediate CA' : 'Signed certificate', usage: d.kind === 'intermediate' ? 'ca' : 'leaf' }), e.submitter);
+});
+
+// ---------- convert ----------
+
+const CONVERT_HINTS = {
+  pem: 'Splits the input into certificate, chain and private key files. Set a password to encrypt the private key.',
+  der: 'Writes each certificate (and the key, CSR or CRL) as a binary DER file.',
+  p7b: 'Bundles the certificates into one PKCS#7 file. Private keys cannot be stored in P7B.',
+  pfx: 'Add the private key and the certificate chain to the input. The PFX is encrypted with the password you choose.',
+  jks: 'Add the private key and certificate chain to make a key entry, or just certificates for a trust store. The key password equals the keystore password.'
+};
+
+function syncConvertForm() {
+  const format = $('convertFormat').value;
+  const needsPassword = format === 'pfx' || format === 'jks';
+  $('convertOutOptions').hidden = !(needsPassword || format === 'pem');
+  $('convertOutPassword').placeholder = format === 'pem' ? 'Password to encrypt the private key (optional)' : 'Password for the output (required)';
+  $('convertAlias').hidden = format === 'pem';
+  $('convertLegacyRow').hidden = format !== 'pfx';
+  $('convertHint').textContent = CONVERT_HINTS[format];
+}
+$('convertFormat').addEventListener('change', syncConvertForm);
+
+function renderConverted(data) {
+  const s = data.summary;
+  const found = [];
+  if (s.certificates) found.push(`${s.certificates} certificate${s.certificates === 1 ? '' : 's'}`);
+  if (s.privateKey) found.push('a private key');
+  if (s.csrs) found.push(`${s.csrs} CSR${s.csrs === 1 ? '' : 's'}`);
+  if (s.crls) found.push(`${s.crls} CRL${s.crls === 1 ? '' : 's'}`);
+  const match = s.keyMatchesLeaf === null ? '' : s.keyMatchesLeaf ? ` ${badge('good', 'Key matches the first certificate')}` : ` ${badge('bad', 'Key does not match the first certificate')}`;
+  return `<div class="panel">
+    <div class="panel-title">Found ${escapeHtml(found.join(', '))}${match}</div>
+    ${s.chain.length ? `<div class="muted">Order: ${s.chain.map(escapeHtml).join(' &rarr; ')}</div>` : ''}
+    ${s.keystoreAliases && s.keystoreAliases.length ? `<div class="muted">Keystore entries: ${escapeHtml(s.keystoreAliases.join(', '))}</div>` : ''}
+  </div>${toolWarnings(data.warnings)}${renderFiles(data.files)}`;
+}
+
+$('convertForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const out = $('result-convert');
+  if (!hasInput('convertFiles', 'convertText')) return showError(out, 'Choose files or paste some text to convert.');
+  const format = $('convertFormat').value;
+  if ((format === 'pfx' || format === 'jks') && !$('convertOutPassword').value) return showError(out, 'Choose a password for the output file.');
+  const fd = new FormData();
+  appendInputs(fd, 'convertFiles', 'files', 'convertText', 'text');
+  fd.append('format', format);
+  appendIf(fd, 'password', $('convertPassword').value);
+  appendIf(fd, 'outputPassword', $('convertOutPassword').value);
+  appendIf(fd, 'alias', $('convertAlias').value);
+  if (format === 'pfx' && $('convertLegacy').checked) fd.append('legacy', 'true');
+  postTool('/api/convert', fd, out, renderConverted, e.submitter);
+});
+syncConvertForm();
+
 
 // ---------- session ----------
 

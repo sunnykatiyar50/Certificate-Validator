@@ -55,6 +55,12 @@ async function sampleEntry(name, extra = {}) {
   };
 }
 
+// Every state-changing API route. All of them must require a session and the CSRF header.
+const TOOL_POSTS = [
+  '/api/validate-certificate', '/api/check-host', '/api/generate-keypair', '/api/history',
+  '/api/convert', '/api/decode', '/api/csr/create', '/api/ca/create', '/api/ca/sign'
+];
+
 // ---------- configuration ----------
 
 test('auth configuration is validated at startup', () => {
@@ -151,7 +157,7 @@ test('login, sessions and route protection', async t => {
       assert.equal(res.status, 401, path);
       assert.match(data.error, /Authentication required/);
     }
-    for (const path of ['/api/validate-certificate', '/api/check-host', '/api/generate-keypair', '/api/history']) {
+    for (const path of TOOL_POSTS) {
       assert.equal((await c.request(path, { method: 'POST', json: {} })).res.status, 401, path);
     }
   });
@@ -204,6 +210,9 @@ test('login, sessions and route protection', async t => {
     const { res, data } = await c.request('/api/generate-keypair', { method: 'POST', json: { algorithm: 'Ed25519', commonName: 'ok.test' }, csrf: false });
     assert.equal(res.status, 403);
     assert.match(data.error, /X-Requested-With/);
+    for (const path of TOOL_POSTS) {
+      assert.equal((await c.request(path, { method: 'POST', json: {}, csrf: false })).res.status, 403, `${path} without the CSRF header`);
+    }
     assert.equal((await c.request('/auth/logout', { method: 'POST', csrf: false })).res.status, 403);
     assert.equal((await c.request('/api/history', { method: 'DELETE', csrf: false })).res.status, 403);
   });

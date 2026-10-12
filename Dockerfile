@@ -10,9 +10,9 @@ FROM node:22-alpine
 ARG VERSION=""
 ARG REVISION=""
 
-LABEL org.opencontainers.image.title="Certificate Validator" \
-      org.opencontainers.image.description="Validate X.509 certificates, certificate chains and live TLS sites" \
-      org.opencontainers.image.source="https://github.com/sunnykatiyar50/Certificate-Validator" \
+LABEL org.opencontainers.image.title="Certificate Workbench" \
+      org.opencontainers.image.description="Validate, decode, convert and create X.509 certificates, keys and CSRs" \
+      org.opencontainers.image.source="https://github.com/sunnykatiyar50/Certificate-Workbench" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${REVISION}"
 
