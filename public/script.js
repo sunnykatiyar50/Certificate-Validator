@@ -27,6 +27,11 @@ function slug(text) {
   return String(text || 'keypair').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50) || 'keypair';
 }
 
+// A unique id for one result on the page, e.g. to find a binary download again when its button is clicked.
+function newId() {
+  return window.crypto && crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
+}
+
 // All API calls go through here: the X-Requested-With header is required for writes (CSRF defence),
 // and an expired session sends the user back to the login page.
 async function api(url, options = {}) {
@@ -334,7 +339,7 @@ algorithmSelect.addEventListener('change', syncGenerateForm);
 $('genOutput').addEventListener('change', syncGenerateForm);
 
 function pemBlock(title, pem, filename, { secret = false, kind } = {}) {
-  return `<div class="pem-block${secret ? ' secret' : ''}" data-kind="${kind}">
+  return `<div class="pem-block${secret ? ' secret' : ''}" data-kind="${escapeHtml(kind)}">
     <div class="pem-head">
       <span><b>${escapeHtml(title)}</b>${secret ? ' ' + badge('bad', 'keep secret') : ''}</span>
       <span class="pem-actions">

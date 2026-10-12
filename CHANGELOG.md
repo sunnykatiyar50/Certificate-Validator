@@ -6,6 +6,9 @@ Add your notes under **Unreleased** as you work. `node scripts/release.js` moves
 
 ## Unreleased
 
+### Fixed
+- Converting to **PFX, JKS or DER** (and any other binary download) failed with "newId is not defined" since 2.0.0. They work again.
+
 ## 2.2.0 - 2026-10-12
 
 ### Added
