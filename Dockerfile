@@ -24,6 +24,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules node_modules
 COPY package.json server.js ./
 COPY lib lib
+COPY data data
 COPY public public
 
 USER node
