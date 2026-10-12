@@ -1,6 +1,6 @@
 # Certificate Validator
 
-A small web app for validating X.509 certificates and generating key pairs.
+A small web app for validating X.509 certificates and generating key pairs, behind a sign-in with an admin and regular users.
 
 ## Features
 
@@ -13,7 +13,11 @@ A small web app for validating X.509 certificates and generating key pairs.
 
 **Create**
 - **Generate keys:** create a key pair with a self-signed certificate, a CSR, or keys only. Supports RSA 2048/3072/4096, ECDSA P-256/P-384/P-521 and Ed25519, with SHA-256/384/512, SANs, subject fields, validity and a CA option. Results can be copied, downloaded as PEM, or sent straight to the validator.
-- **History:** generated key pairs are saved under a name (rename or delete any time). History is stored only in your browser's local storage, unencrypted, and you choose whether the private key is included. The server never stores generated keys.
+- **History:** generated key pairs are saved under a name (rename or delete any time). Users see only their own history and the admin sees everyone's. The server stores the certificate, CSR, public key and details, but never a private key: if you choose to keep one, it stays in your browser only (unencrypted).
+
+**Accounts and appearance**
+- Sign-in with an admin from `.env` plus regular users (see [Authentication](#authentication)).
+- Light, dark or system theme, on the login page and in the app.
 
 Not covered yet: revocation checking (CRL/OCSP).
 
@@ -22,23 +26,26 @@ Not covered yet: revocation checking (CRL/OCSP).
 ```
 server.js        Express app and API routes
 lib/             certificate.js (parsing), analysis.js (chain/hostname/warnings),
-                 liveCheck.js (live TLS fetch, SSRF protection), keygen.js (key generation)
-public/          static frontend (HTML/CSS/JS), served by the server
+                 liveCheck.js (live TLS fetch, SSRF protection), keygen.js (key generation),
+                 auth.js (accounts, sessions), historyStore.js (per-user history in SQLite)
+public/          static frontend (HTML/CSS/JS, login page), served by the server
 test/            tests (node:test)
-scripts/         release.js (version bump + tag)
+scripts/         release.js (version bump + tag), hash-password.js (password hashes, session secret)
 Dockerfile, docker-compose.yml, .github/workflows/docker.yml
 ```
 
 ## Requirements
 
-- [Node.js](https://nodejs.org/) 22 or newer (includes npm), or
+- [Node.js](https://nodejs.org/) 22.13 or newer (includes npm; the history database uses Node's built-in SQLite), or
 - [Docker](https://www.docker.com/) to run the container image instead.
 
 ## Run locally
 
+The app needs sign-in settings, or it refuses to start. Copy `sample.env` to `.env`, fill in `ADMIN_PASSWORD` and `SESSION_SECRET`, and load them into your shell (or use your editor's env support). For quick local use without a login:
+
 ```bash
 npm install
-npm start
+AUTH_DISABLED=1 npm start      # PowerShell: $env:AUTH_DISABLED=1; npm start
 ```
 
 The app runs at [http://localhost:33003](http://localhost:33003). The server also serves the frontend from `public/`, so there is nothing else to start.
@@ -61,6 +68,12 @@ pkill -f "node server.js"
 
 ## Run with Docker
 
+First create your settings: copy `sample.env` to `.env`, then set at least `ADMIN_PASSWORD` and `SESSION_SECRET` (Compose refuses to start without them). See [Authentication](#authentication).
+
+```bash
+cp sample.env .env
+```
+
 Build from source and run:
 
 ```bash
@@ -82,9 +95,31 @@ Remove-Item Env:APP_VERSION   # clear it afterwards
 
 You can also keep the settings in a `.env` file next to `docker-compose.yml`: copy `sample.env` to `.env` and edit it (for example `APP_VERSION=1.1.1`). Then plain `docker compose up -d` is enough. The container is named `cert-validator`, so you can use `docker logs cert-validator` and `docker stop cert-validator`.
 
-The app is then at [http://localhost:33003](http://localhost:33003). Compose settings (all optional): `APP_VERSION`, `HOST_PORT` (default `33003`), `TRUST_PROXY`, `CORS_ORIGIN`. The container runs as a non-root user with a read-only filesystem and has a `/healthz` health check.
+The app is then at [http://localhost:33003](http://localhost:33003). Compose settings: `ADMIN_PASSWORD` and `SESSION_SECRET` are required; `ADMIN_USERNAME`, `USERS`, `SESSION_TTL_HOURS`, `APP_VERSION`, `HOST_PORT` (default `33003`), `TRUST_PROXY` and `CORS_ORIGIN` are optional. The container runs as a non-root user with a read-only filesystem and has a `/healthz` health check. The history database is kept in the `cert-validator-data` volume (mounted at `/app/data`), so it survives restarts and upgrades.
 
 If pulling the image is denied, the package is still private: make it public in the repository's Packages settings, or run `docker login ghcr.io`.
+
+## Authentication
+
+Every page and API (except `/healthz`, `/api/version` and the login page) needs a signed-in user. Accounts come from environment variables, as in `sample.env`:
+
+| Variable | Purpose |
+| --- | --- |
+| `ADMIN_USERNAME` | Admin account name (default `admin`) |
+| `ADMIN_PASSWORD` | Admin password, at least 8 characters, or a hash. **Required.** |
+| `USERS` | Regular users: `alice:password,bob:password`. Optional. |
+| `SESSION_SECRET` | At least 32 random characters; signs the session cookie. **Required.** |
+| `SESSION_TTL_HOURS` | Sign-in lifetime, default `12` |
+| `AUTH_DISABLED` | `1` skips sign-in entirely (everyone is an admin). Local development only. |
+
+The server refuses to start, and logs what is wrong, if a required value is missing, too short, or still a `change-me` placeholder.
+
+- **Roles:** the admin and users can use every feature. In History, users see only their own items; the admin sees everyone's and can filter by user, rename or delete any item.
+- **Hashed passwords:** instead of plain text you can store a hash: `npm run hash-password` prompts for a password and prints a value to use for `ADMIN_PASSWORD` or in `USERS=name:hash`. With Docker: `docker run --rm -it ghcr.io/sunnykatiyar50/certificate-validator node scripts/hash-password.js`. Generate a `SESSION_SECRET` with `npm run hash-password -- --secret`.
+- **Sessions:** a signed cookie (`HttpOnly`, `SameSite=Strict`, `Secure` when served over HTTPS, so set `TRUST_PROXY` behind a TLS proxy). Changing a user's password, removing the user, or changing `SESSION_SECRET` signs them out. Sign-out only clears the browser's cookie; a stolen cookie stays valid until it expires.
+- **Protections:** failed sign-ins are limited to 10 per 15 minutes per address, state-changing requests need an `X-Requested-With` header (CSRF), and responses carry a strict Content-Security-Policy.
+- **Private keys:** the server never stores them. If you keep one with a history item, it is saved in that browser only, per user, unencrypted.
+- **Changing accounts** means editing `.env` and restarting the container. History is tied to the username, so renaming a user detaches their old items (the admin can still see and delete them).
 
 ## Configuration
 
@@ -94,6 +129,7 @@ If pulling the image is denied, the package is still private: make it public in 
 | `CORS_ORIGIN` | unset (CORS off) | Comma-separated origins allowed to call the API cross-origin |
 | `TRUST_PROXY` | unset | Set when behind a reverse proxy so rate limiting sees client IPs. Use the number of proxy hops (`1` for a single proxy), or a comma-separated list of proxy IPs/subnets (`loopback, 172.16.0.0/12`). `true` trusts every hop and lets clients spoof their IP, so prefer a number or a list. |
 | `ALLOW_PRIVATE_HOSTS` | unset | Set to `1` to let live checks reach private/loopback addresses (local use only) |
+| `DATA_DIR` | `./data` (`/app/data` in Docker) | Where the history database (`history.db`) is stored |
 | `APP_VERSION` | from `package.json` | Version shown in the app; set by the Docker build |
 
 Uploads are limited to 1 MB and the supported extensions, are processed in memory, and are never written to disk. Rate limits per client: 60 validations/min, 20 key generations/min, 10 live checks/min.
@@ -102,12 +138,14 @@ Uploads are limited to 1 MB and the supported extensions, are processed in memor
 
 | Endpoint | Purpose |
 | --- | --- |
+| `POST /auth/login`, `POST /auth/logout`, `GET /auth/status` | Sign in (JSON `username`, `password`), sign out, current user |
 | `POST /api/validate-certificate` | Multipart form: `certificate` (file) or `certText`, plus optional `password` and `hostname` |
 | `POST /api/check-host` | JSON `{ "host": "example.com", "port": 443 }`: fetch and analyse a server's chain |
 | `POST /api/generate-keypair` | JSON options (`algorithm`, `output`, `commonName`, `sans`, `hash`, `validityDays`, ...): returns the keys and certificate or CSR. Nothing is stored. |
 | `GET /api/algorithms` | Supported key algorithms |
-| `GET /api/version` | Running version |
-| `GET /healthz` | Health check |
+| `GET/POST/DELETE /api/history`, `PATCH/DELETE /api/history/:id` | The caller's history (admins: everyone's, `?owner=` filters). Private keys are rejected. |
+| `GET /api/version` | Running version (public) |
+| `GET /healthz` | Health check (public) |
 
 ## Tests
 

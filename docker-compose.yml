@@ -16,12 +16,24 @@ services:
     ports:
       - "${HOST_PORT:-33003}:33003"
     environment:
+      # Sign-in. See sample.env. Compose refuses to start until the two required values are set.
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env (copy sample.env)}
+      USERS: ${USERS:-}
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env (copy sample.env)}
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-12}
       # Set to 1 when running behind a reverse proxy so rate limiting sees client IPs.
       TRUST_PROXY: ${TRUST_PROXY:-}
       CORS_ORIGIN: ${CORS_ORIGIN:-}
+    volumes:
+      # User history database (the root filesystem is read-only).
+      - cert-validator-data:/app/data
     restart: unless-stopped
     read_only: true
     cap_drop:
       - ALL
     security_opt:
       - no-new-privileges:true
+
+volumes:
+  cert-validator-data:

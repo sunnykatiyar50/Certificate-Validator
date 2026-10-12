@@ -25,6 +25,12 @@ COPY --from=deps /app/node_modules node_modules
 COPY package.json server.js ./
 COPY lib lib
 COPY public public
+COPY scripts/hash-password.js scripts/hash-password.js
+
+# The history database lives here; mount a volume to keep it across container restarts.
+RUN mkdir -p /app/data && chown node:node /app/data
+ENV DATA_DIR=/app/data
+VOLUME ["/app/data"]
 
 USER node
 EXPOSE 33003
