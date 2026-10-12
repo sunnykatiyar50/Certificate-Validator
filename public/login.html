@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign in - Certificate Workbench</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="theme.js"></script>
+</head>
+<body class="login-page">
+  <div class="login-shell">
+    <section class="login-brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6l7-3z"></path>
+          <path d="M9 12l2 2 4-4"></path>
+        </svg>
+      </div>
+      <h1>Certificate Workbench</h1>
+      <p class="tagline">Validate, decode, convert and create certificates, keys and CSRs.</p>
+      <ul class="brand-points">
+        <li>Chain, hostname and live-site checks against the Mozilla CA store</li>
+        <li>Decode CSRs and CRLs; convert PEM, DER, P7B, PFX and JKS</li>
+        <li>A local CA, key generation and a personal history</li>
+      </ul>
+    </section>
+
+    <section class="login-panel">
+      <button type="button" class="theme-corner" data-theme-toggle></button>
+      <form id="loginForm" class="login-card form" novalidate>
+        <h2>Sign in</h2>
+        <p class="muted">Use the account provided by your administrator.</p>
+
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="64" required>
+
+        <label for="password">Password</label>
+        <div class="password-row">
+          <input type="password" id="password" name="password" autocomplete="current-password" maxlength="256" required>
+          <button type="button" id="togglePassword" class="btn small" aria-label="Show password" aria-pressed="false">Show</button>
+        </div>
+        <div id="capsHint" class="hint warn-text" hidden>Caps Lock is on.</div>
+
+        <div id="loginError" class="login-error" role="alert" hidden></div>
+
+        <button type="submit" id="loginBtn" class="btn primary login-submit">Sign in</button>
+        <div id="version" class="login-version"></div>
+      </form>
+    </section>
+  </div>
+  <script src="login.js"></script>
+</body>
+</html>

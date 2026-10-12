@@ -60,4 +60,9 @@ function validTrustedRoot() {
     .find(c => new Date(c.validTo) > now + 30 * DAY && c.checkIssued(c));
 }
 
-module.exports = { DAY, createCert, generateKeys, privateKeyPem, tamperPem, validTrustedRoot };
+const { loadAuthConfig } = require('../lib/auth');
+
+// Auth settings for tests that are not about authentication.
+const noAuth = loadAuthConfig({ AUTH_DISABLED: '1' });
+
+module.exports = { noAuth, DAY, createCert, generateKeys, privateKeyPem, tamperPem, validTrustedRoot };

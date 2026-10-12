@@ -7,7 +7,7 @@ const { generateKeyPair } = require('../lib/keygen');
 const { createCa, signCsr, createCsr, CaError } = require('../lib/ca');
 const { decode } = require('../lib/decode');
 const { analyzeChain } = require('../lib/analysis');
-const { DAY, createCert, privateKeyPem } = require('./helpers');
+const { DAY, createCert, privateKeyPem, noAuth } = require('./helpers');
 
 x509.cryptoProvider.set(crypto.webcrypto);
 
@@ -192,7 +192,7 @@ test('CSR from an existing key', async t => {
 });
 
 test('tool endpoints', async t => {
-  const { server, base } = await listen(createApp({ enableRateLimit: false }));
+  const { server, base } = await listen(createApp({ auth: noAuth, enableRateLimit: false }));
   t.after(() => close(server));
 
   await t.test('convert returns files, with the PFX as base64', async () => {

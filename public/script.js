@@ -2,6 +2,8 @@ const $ = id => document.getElementById(id);
 
 // ---------- helpers ----------
 
+const state = { user: null };
+
 function escapeHtml(str) {
   if (str === null || str === undefined) return '';
   return String(str)
@@ -25,16 +27,35 @@ function slug(text) {
   return String(text || 'keypair').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50) || 'keypair';
 }
 
+// All API calls go through here: the X-Requested-With header is required for writes (CSRF defence),
+// and an expired session sends the user back to the login page.
+async function api(url, options = {}) {
+  const response = await fetch(url, {
+    ...options,
+    headers: { 'X-Requested-With': 'fetch', ...(options.headers || {}) },
+    credentials: 'same-origin'
+  });
+  if (response.status === 401) {
+    location.href = '/login.html';
+    throw new Error('Your session has ended. Please sign in again.');
+  }
+  return response;
+}
+
+function jsonRequest(method, body) {
+  return { method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) };
+}
+
 // ---------- navigation ----------
 
-const navItems = document.querySelectorAll('.nav-item');
+const navItems = document.querySelectorAll('.nav-item[data-view]');
 const views = document.querySelectorAll('.view');
 
 function showView(name) {
   if (!$(`view-${name}`)) name = 'file';
   navItems.forEach(b => b.classList.toggle('active', b.dataset.view === name));
   views.forEach(v => v.classList.toggle('active', v.id === `view-${name}`));
-  if (name === 'history') renderHistory();
+  if (name === 'history') refreshHistory();
   try { history.replaceState(null, '', `#${name}`); } catch (e) { /* hash is a convenience only */ }
 }
 navItems.forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
@@ -44,10 +65,10 @@ navItems.forEach(b => b.addEventListener('click', () => showView(b.dataset.view)
 async function submitAndRender(url, options, out) {
   out.textContent = 'Working...';
   try {
-    const response = await fetch(url, options);
+    const response = await api(url, options);
     renderCertResults(await response.json(), out);
   } catch (err) {
-    showError(out, 'Request failed. Is the server running?');
+    showError(out, err.message === 'Failed to fetch' ? 'Request failed. Is the server running?' : err.message);
   }
 }
 
@@ -92,11 +113,7 @@ $('liveForm').addEventListener('submit', e => {
     host = hostPort[1];
     port = port || hostPort[2];
   }
-  submitAndRender('/api/check-host', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ host, port: port || undefined })
-  }, out);
+  submitAndRender('/api/check-host', jsonRequest('POST', { host, port: port || undefined }), out);
 });
 
 function clearForm(ids, outId) {
@@ -270,7 +287,7 @@ function groupLabel(id) {
 
 async function loadAlgorithms() {
   try {
-    const { algorithms } = await (await fetch('/api/algorithms')).json();
+    const { algorithms } = await (await api('/api/algorithms')).json();
     const groups = new Map();
     algorithms.forEach(a => {
       const g = groupLabel(a.id);
@@ -310,7 +327,7 @@ function pemBlock(title, pem, filename, { secret = false, kind } = {}) {
 }
 
 // Shared by the Generate result and the History detail.
-function renderKeyPair(entry, { notice = '', historyId = null } = {}) {
+function renderKeyPair(entry, { notice = '', historyId = null, missingKeyMessage = '' } = {}) {
   const base = slug(entry.name);
   const kind = entry.certificatePem ? 'Self-signed certificate' : entry.csrPem ? 'Certificate signing request' : 'Key pair only';
   const hash = entry.hash ? ` with ${entry.hash}` : '';
@@ -328,6 +345,7 @@ function renderKeyPair(entry, { notice = '', historyId = null } = {}) {
     ${notice ? `<div class="notice">${notice}</div>` : ''}
     ${section('Details', [
       row('Type', escapeHtml(kind + hash)),
+      row('Owner', entry.owner ? escapeHtml(entry.owner) : ''),
       row('Subject', entry.subject ? `<span class="rdn"><b>CN</b> ${escapeHtml(entry.subject)}</span>` : ''),
       row('Subject alt names', chips(entry.sans || [])),
       row('Role', entry.certificatePem ? escapeHtml(entry.isCA ? 'CA certificate' : 'End-entity (TLS server and client)') : ''),
@@ -341,10 +359,19 @@ function renderKeyPair(entry, { notice = '', historyId = null } = {}) {
       ${entry.csrPem ? pemBlock('Certificate signing request', entry.csrPem, `${base}-csr.pem`, { kind: 'csr' }) : ''}
       ${entry.privateKeyPem
         ? pemBlock('Private key (PKCS#8)', entry.privateKeyPem, `${base}-key.pem`, { secret: true, kind: 'private' })
-        : '<div class="panel muted">The private key was not saved to history.</div>'}
+        : `<div class="panel muted">${escapeHtml(missingKeyMessage || 'The private key was not saved.')}</div>`}
       ${entry.publicKeyPem ? pemBlock('Public key (SPKI)', entry.publicKeyPem, `${base}-pub.pem`, { kind: 'public' }) : ''}
     </div>
   </div>`;
+}
+
+// What the server stores: everything except the private key.
+function historyPayload(entry) {
+  return {
+    name: entry.name, algorithm: entry.algorithm, algorithmLabel: entry.algorithmLabel, hash: entry.hash,
+    subject: entry.subject, sans: entry.sans || [], isCA: !!entry.isCA, notBefore: entry.notBefore, notAfter: entry.notAfter,
+    fingerprintSha256: entry.fingerprintSha256, certificatePem: entry.certificatePem, csrPem: entry.csrPem, publicKeyPem: entry.publicKeyPem
+  };
 }
 
 $('generateForm').addEventListener('submit', async e => {
@@ -373,92 +400,204 @@ $('generateForm').addEventListener('submit', async e => {
   submit.disabled = true;
   out.textContent = 'Generating...';
   try {
-    const response = await fetch('/api/generate-keypair', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
-    });
+    const response = await api('/api/generate-keypair', jsonRequest('POST', body));
     const data = await response.json();
     if (!response.ok || data.error) return showError(out, data.error || 'Key generation failed.');
 
     const entry = {
       ...data,
-      id: newId(),
       name: $('genName').value.trim() || `${commonName || 'keypair'} (${data.algorithmLabel})`,
       createdAt: new Date().toISOString()
     };
     let notice;
     const saveMode = $('genHistory').value;
-    if (saveMode !== 'none') {
-      const stored = { ...entry, privateKeyPem: saveMode === 'with' ? entry.privateKeyPem : null };
-      notice = addToHistory(stored)
-        ? `Saved to history as <b>${escapeHtml(entry.name)}</b>${saveMode === 'with' ? ' (including the private key)' : ' (without the private key)'}.`
-        : 'Could not save to history: browser storage is unavailable or full.';
-    } else {
+    if (saveMode === 'none') {
       notice = 'Not saved. Copy or download the private key now, it cannot be recovered later.';
+    } else {
+      const saved = await api('/api/history', jsonRequest('POST', historyPayload(entry)));
+      const result = await saved.json();
+      if (!saved.ok) {
+        notice = `Could not save to history: ${escapeHtml(result.error || 'unknown error')}. Copy or download the private key now.`;
+      } else {
+        notice = `Saved to history as <b>${escapeHtml(entry.name)}</b>. `;
+        if (saveMode === 'with') {
+          notice += saveLocalKey(result.entry.id, data.privateKeyPem)
+            ? 'The private key is kept in this browser only, never on the server.'
+            : 'The private key could not be kept (browser storage is unavailable), so copy or download it now.';
+        } else {
+          notice += 'The private key was not kept, so copy or download it now.';
+        }
+        updateHistoryCount();
+      }
     }
     out.innerHTML = renderKeyPair(entry, { notice });
   } catch (err) {
-    showError(out, 'Request failed. Is the server running?');
+    showError(out, err.message === 'Failed to fetch' ? 'Request failed. Is the server running?' : err.message);
   } finally {
     submit.disabled = false;
   }
 });
 
-// ---------- history (browser localStorage) ----------
+// ---------- history (stored on the server; private keys only in this browser) ----------
 
-const HISTORY_KEY = 'certvalidator.history.v1';
-let selectedHistoryId = null;
+// Private keys never go to the server. If the user chooses to keep one, it lives in this browser's
+// storage under the signed-in username, keyed by the history item's id.
+const keyStoreName = () => `certvalidator.keys.v1:${state.user.username}`;
+const LEGACY_HISTORY_KEY = 'certvalidator.history.v1';
 
-function newId() {
-  return window.crypto && crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
-}
-
-function loadHistory() {
+function loadLocalKeys() {
   try {
-    const list = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
-    return Array.isArray(list) ? list : [];
+    const keys = JSON.parse(localStorage.getItem(keyStoreName()) || '{}');
+    return keys && typeof keys === 'object' ? keys : {};
   } catch (e) {
-    return [];
+    return {};
   }
 }
 
-function saveHistory(list) {
+function saveLocalKeys(keys) {
   try {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+    localStorage.setItem(keyStoreName(), JSON.stringify(keys));
     return true;
   } catch (e) {
     return false;
   }
 }
 
-function addToHistory(entry) {
-  const list = loadHistory();
-  list.unshift(entry);
-  const ok = saveHistory(list);
-  updateHistoryCount();
-  return ok;
+function saveLocalKey(id, privateKeyPem) {
+  const keys = loadLocalKeys();
+  keys[id] = privateKeyPem;
+  return saveLocalKeys(keys);
+}
+
+function removeLocalKeys(ids) {
+  const keys = loadLocalKeys();
+  ids.forEach(id => delete keys[id]);
+  saveLocalKeys(keys);
+}
+
+function loadLegacyHistory() {
+  try {
+    const list = JSON.parse(localStorage.getItem(LEGACY_HISTORY_KEY) || '[]');
+    return Array.isArray(list) ? list.filter(e => e && e.name && e.algorithm) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+let historyEntries = [];
+let selectedHistoryId = null;
+let historyOwnerFilter = '';
+
+function isAdmin() {
+  return state.user && state.user.role === 'admin';
 }
 
 function updateHistoryCount() {
-  const n = loadHistory().length;
-  $('historyCount').textContent = n;
-  $('historyCount').hidden = n === 0;
+  api('/api/history').then(r => r.json()).then(data => {
+    historyEntries = data.history || [];
+    $('historyCount').textContent = historyEntries.length;
+    $('historyCount').hidden = historyEntries.length === 0;
+  }).catch(() => {});
 }
 
-function renderHistory() {
-  const list = loadHistory();
-  $('clearHistoryBtn').hidden = list.length === 0;
+async function refreshHistory() {
+  try {
+    const response = await api('/api/history');
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Could not load history.');
+    historyEntries = data.history;
+  } catch (err) {
+    $('historyList').innerHTML = `<p class="muted">${escapeHtml(err.message)}</p>`;
+    return;
+  }
+  $('historyCount').textContent = historyEntries.length;
+  $('historyCount').hidden = historyEntries.length === 0;
+  drawHistory();
+}
+
+function drawHistory() {
+  const me = state.user.username;
+  let list = historyEntries;
+
+  // Admins can narrow the list to one user.
+  $('historyAdminBar').hidden = !isAdmin();
+  if (isAdmin()) {
+    const counts = new Map();
+    historyEntries.forEach(e => counts.set(e.owner, (counts.get(e.owner) || 0) + 1));
+    if (historyOwnerFilter && !counts.has(historyOwnerFilter)) historyOwnerFilter = '';
+    $('historyOwner').innerHTML = `<option value="">All users (${historyEntries.length})</option>` +
+      [...counts].sort((a, b) => a[0].localeCompare(b[0])).map(([owner, n]) =>
+        `<option value="${escapeHtml(owner)}">${escapeHtml(owner)}${owner === me ? ' (you)' : ''} (${n})</option>`).join('');
+    $('historyOwner').value = historyOwnerFilter;
+    if (historyOwnerFilter) list = list.filter(e => e.owner === historyOwnerFilter);
+  }
+
+  // Items saved in this browser before accounts existed can be imported once.
+  const legacy = loadLegacyHistory();
+  $('legacyBanner').hidden = legacy.length === 0;
+  if (legacy.length) {
+    $('legacyBanner').innerHTML = `${legacy.length} item${legacy.length === 1 ? '' : 's'} saved in this browser before sign-in was added.
+      <button type="button" class="btn small" data-action="import-legacy">Import to my history</button>`;
+  }
+
+  $('clearHistoryBtn').hidden = !historyEntries.some(e => e.owner === me);
   if (!list.some(e => e.id === selectedHistoryId)) selectedHistoryId = list.length ? list[0].id : null;
 
   $('historyList').innerHTML = list.length
     ? list.map(e => `<button type="button" class="history-item${e.id === selectedHistoryId ? ' selected' : ''}" data-action="select" data-id="${escapeHtml(e.id)}">
         <span class="history-name">${escapeHtml(e.name)}</span>
-        <span class="history-meta">${escapeHtml(e.algorithmLabel)} &middot; ${escapeHtml(formatDate(e.createdAt))}</span>
-        <span class="history-tags">${e.certificatePem ? badge('info', 'cert') : ''}${e.csrPem ? badge('info', 'csr') : ''}${e.privateKeyPem ? badge('warn', 'private key') : ''}</span>
+        <span class="history-meta">${escapeHtml(e.algorithmLabel)} &middot; ${escapeHtml(formatDate(e.createdAt))}${isAdmin() ? ` &middot; ${escapeHtml(e.owner)}` : ''}</span>
+        <span class="history-tags">${e.certificatePem ? badge('info', 'cert') : ''}${e.csrPem ? badge('info', 'csr') : ''}${e.owner === me && loadLocalKeys()[e.id] ? badge('warn', 'private key here') : ''}</span>
       </button>`).join('')
-    : '<p class="muted">Nothing here yet. Generated key pairs you choose to save will be listed here.</p>';
+    : `<p class="muted">${historyEntries.length ? 'No items for this user.' : 'Nothing here yet. Generated key pairs you choose to save will be listed here.'}</p>`;
 
   const selected = list.find(e => e.id === selectedHistoryId);
-  $('result-history').innerHTML = selected ? renderKeyPair(selected, { historyId: selected.id }) : '';
+  if (!selected) {
+    $('result-history').innerHTML = '';
+    return;
+  }
+  const mine = selected.owner === me;
+  const privateKeyPem = mine ? loadLocalKeys()[selected.id] : undefined;
+  $('result-history').innerHTML = renderKeyPair({ ...selected, privateKeyPem }, {
+    historyId: selected.id,
+    missingKeyMessage: mine
+      ? 'The private key is not stored on the server, and it was not kept in this browser.'
+      : 'Private keys are never stored on the server, so only the person who generated this can have it.'
+  });
+}
+
+$('historyOwner').addEventListener('change', e => {
+  historyOwnerFilter = e.target.value;
+  drawHistory();
+});
+
+async function importLegacyHistory(button) {
+  const legacy = loadLegacyHistory();
+  button.disabled = true;
+  let imported = 0;
+  const failures = [];
+  for (const item of legacy) {
+    try {
+      const response = await api('/api/history', jsonRequest('POST', historyPayload(item)));
+      const data = await response.json();
+      if (!response.ok) {
+        failures.push(`${item.name}: ${data.error}`);
+        continue;
+      }
+      if (item.privateKeyPem) saveLocalKey(data.entry.id, item.privateKeyPem);
+      imported++;
+    } catch (err) {
+      failures.push(`${item.name}: ${err.message}`);
+    }
+  }
+  if (!failures.length) {
+    try { localStorage.removeItem(LEGACY_HISTORY_KEY); } catch (e) { /* ignore */ }
+  }
+  await refreshHistory();
+  if (failures.length) {
+    $('legacyBanner').hidden = false;
+    $('legacyBanner').textContent = `Imported ${imported} of ${legacy.length}. Not imported: ${failures.join('; ')}`;
+  }
 }
 
 // ---------- click actions (copy, download, history, ...) ----------
@@ -467,6 +606,13 @@ function flash(btn, text) {
   const original = btn.textContent;
   btn.textContent = text;
   setTimeout(() => { btn.textContent = original; }, 1200);
+}
+
+async function historyRequest(method, url, body) {
+  const response = await api(url, jsonRequest(method, body));
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) window.alert(data.error || 'That did not work.');
+  return response.ok ? data : null;
 }
 
 document.addEventListener('click', async e => {
@@ -532,31 +678,33 @@ document.addEventListener('click', async e => {
     }
   } else if (action === 'select') {
     selectedHistoryId = id;
-    renderHistory();
+    drawHistory();
   } else if (action === 'rename') {
-    const list = loadHistory();
-    const entry = list.find(x => x.id === id);
+    const entry = historyEntries.find(x => x.id === id);
     const name = entry && window.prompt('Rename', entry.name);
-    if (name && name.trim()) {
-      entry.name = name.trim().slice(0, 80);
-      saveHistory(list);
-      renderHistory();
+    if (name && name.trim() && await historyRequest('PATCH', `/api/history/${encodeURIComponent(id)}`, { name: name.trim() })) {
+      refreshHistory();
     }
   } else if (action === 'delete') {
-    const list = loadHistory();
-    const entry = list.find(x => x.id === id);
-    if (entry && window.confirm(`Delete "${entry.name}" from history? This cannot be undone.`)) {
-      saveHistory(list.filter(x => x.id !== id));
-      updateHistoryCount();
-      renderHistory();
+    const entry = historyEntries.find(x => x.id === id);
+    const whose = entry && entry.owner !== state.user.username ? ` (saved by ${entry.owner})` : '';
+    if (entry && window.confirm(`Delete "${entry.name}"${whose} from history? This cannot be undone.`)) {
+      if (await historyRequest('DELETE', `/api/history/${encodeURIComponent(id)}`)) {
+        removeLocalKeys([id]);
+        refreshHistory();
+      }
     }
   } else if (action === 'clear-history') {
-    if (window.confirm('Delete all saved key pairs from this browser? This cannot be undone.')) {
-      saveHistory([]);
-      selectedHistoryId = null;
-      updateHistoryCount();
-      renderHistory();
+    if (window.confirm('Delete all of your saved key pairs? This cannot be undone.')) {
+      const mine = historyEntries.filter(x => x.owner === state.user.username).map(x => x.id);
+      if (await historyRequest('DELETE', '/api/history')) {
+        removeLocalKeys(mine);
+        selectedHistoryId = null;
+        refreshHistory();
+      }
     }
+  } else if (action === 'import-legacy') {
+    importLegacyHistory(btn);
   }
 });
 
@@ -582,12 +730,12 @@ async function postTool(url, formData, out, render, submit) {
   out.textContent = 'Working...';
   if (submit) submit.disabled = true;
   try {
-    const response = await fetch(url, { method: 'POST', body: formData });
+    const response = await api(url, { method: 'POST', body: formData });
     const data = await response.json();
     if (!response.ok || data.error) return showError(out, data.error || 'The request failed.');
     out.innerHTML = render(data);
   } catch (err) {
-    showError(out, 'Request failed. Is the server running?');
+    showError(out, err.message === 'Failed to fetch' ? 'Request failed. Is the server running?' : err.message);
   } finally {
     if (submit) submit.disabled = false;
   }
@@ -904,6 +1052,25 @@ $('convertForm').addEventListener('submit', e => {
 });
 syncConvertForm();
 
+
+// ---------- session ----------
+
+$('signOutBtn').addEventListener('click', async () => {
+  try {
+    await fetch('/auth/logout', { method: 'POST', headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' });
+  } finally {
+    location.href = '/login.html';
+  }
+});
+
+function showUser(user) {
+  $('userChip').hidden = false;
+  $('userAvatar').textContent = user.authDisabled ? 'L' : user.username.charAt(0);
+  $('userName').textContent = user.authDisabled ? 'Local mode' : user.username;
+  $('userRole').textContent = user.authDisabled ? 'No sign-in' : (user.role === 'admin' ? 'Admin' : 'User');
+  $('signOutBtn').hidden = !!user.authDisabled;
+}
+
 // ---------- init ----------
 
 fetch('/api/version')
@@ -911,6 +1078,20 @@ fetch('/api/version')
   .then(d => { $('version').textContent = `v${d.version}`; })
   .catch(() => {});
 
-loadAlgorithms();
-updateHistoryCount();
-showView(location.hash.slice(1) || 'file');
+(async function init() {
+  let status;
+  try {
+    status = await (await fetch('/auth/status', { credentials: 'same-origin' })).json();
+  } catch (err) {
+    return showError($('result-file'), 'Could not reach the server.');
+  }
+  if (!status.authenticated) {
+    location.href = '/login.html';
+    return;
+  }
+  state.user = status;
+  showUser(status);
+  loadAlgorithms();
+  updateHistoryCount();
+  showView(location.hash.slice(1) || 'file');
+})();

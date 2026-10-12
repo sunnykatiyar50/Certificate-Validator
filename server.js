@@ -2,10 +2,13 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const cors = require('cors');
+const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { parseCertificateInput, buildReport, wrapDer } = require('./lib/certificate');
 const { fetchServerChain, LiveCheckError } = require('./lib/liveCheck');
 const { generateKeyPair, listAlgorithms, KeygenError } = require('./lib/keygen');
+const { AuthConfigError, loadAuthConfig, createAuth } = require('./lib/auth');
+const { HistoryStore, HistoryError } = require('./lib/historyStore');
 const { InputError } = require('./lib/bundle');
 const { KeyError } = require('./lib/keys');
 const { JksError } = require('./lib/jks');
@@ -37,23 +40,75 @@ function parseTrustProxy(value) {
   return v;
 }
 
-function createApp({ allowPrivateHosts = false, enableRateLimit = true, corsOrigin = process.env.CORS_ORIGIN } = {}) {
+function createApp({
+  allowPrivateHosts = false,
+  enableRateLimit = true,
+  corsOrigin = process.env.CORS_ORIGIN,
+  auth: authConfig = loadAuthConfig(process.env),
+  historyStore = null,
+  dataDir = process.env.DATA_DIR || path.join(__dirname, 'data')
+} = {}) {
   const app = express();
+  app.disable('x-powered-by');
   const trustProxy = parseTrustProxy(process.env.TRUST_PROXY);
   if (trustProxy !== undefined) app.set('trust proxy', trustProxy);
 
-  // The frontend is served from the same origin, so CORS stays off unless explicitly configured.
-  if (corsOrigin) app.use(cors({ origin: corsOrigin.split(',') }));
-  app.use(express.static(path.join(__dirname, 'public')));
-  app.use(express.json({ limit: '1mb' }));
+  const auth = createAuth(authConfig);
+  // The history database is opened on first use, so apps that never touch history create no files.
+  let store = historyStore;
+  const getStore = () => (store = store || new HistoryStore(path.join(dataDir, 'history.db')));
 
-  app.get('/healthz', (req, res) => res.json({ status: 'ok' }));
-  app.get('/api/version', (req, res) => res.json({ version: APP_VERSION }));
+  app.use(helmet({
+    contentSecurityPolicy: {
+      useDefaults: false,
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'"],
+        imgSrc: ["'self'", 'data:'],
+        connectSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+        frameAncestors: ["'none'"]
+      }
+    }
+  }));
+
+  // The frontend is served from the same origin, so CORS stays off unless explicitly configured.
+  if (corsOrigin) app.use(cors({ origin: corsOrigin.split(','), credentials: true }));
+  app.use(express.json({ limit: '1mb' }));
 
   const limiter = (max, message) => enableRateLimit
     ? rateLimit({ windowMs: 60 * 1000, limit: max, standardHeaders: true, legacyHeaders: false, message: { error: message } })
     : (req, res, next) => next();
 
+  // Failed sign-ins only: 10 per 15 minutes per client address.
+  const loginLimiter = enableRateLimit
+    ? rateLimit({
+      windowMs: 15 * 60 * 1000, limit: 10, skipSuccessfulRequests: true, standardHeaders: true, legacyHeaders: false,
+      message: { error: 'Too many failed sign-in attempts. Try again in 15 minutes.' }
+    })
+    : (req, res, next) => next();
+
+  // ----- public endpoints -----
+  app.get('/healthz', (req, res) => res.json({ status: 'ok' }));
+  app.get('/api/version', (req, res) => res.json({ version: APP_VERSION }));
+  app.post('/auth/login', loginLimiter, auth.login);
+  app.post('/auth/logout', auth.logout);
+  app.get('/auth/status', auth.status);
+
+  // ----- pages: the app itself needs a session, the login page is public -----
+  const publicDir = path.join(__dirname, 'public');
+  const sendPage = (res, file) => {
+    res.set('Cache-Control', 'no-store');
+    res.sendFile(path.join(publicDir, file));
+  };
+  app.get(['/', '/index.html'], (req, res) => (auth.currentUser(req) ? sendPage(res, 'index.html') : res.redirect('/login.html')));
+  app.get('/login.html', (req, res) => (auth.currentUser(req) ? res.redirect('/') : sendPage(res, 'login.html')));
+  app.use(express.static(publicDir, { index: false }));
+
+  // ----- everything under /api (except /api/version) requires a signed-in user -----
   // Files are kept in memory and never written to disk.
   const upload = multer({
     storage: multer.memoryStorage(),
@@ -89,7 +144,9 @@ function createApp({ allowPrivateHosts = false, enableRateLimit = true, corsOrig
 
   const flag = value => value === true || value === 'true' || value === 'on' || value === '1';
 
+  // Every tool needs a signed-in user: they accept private keys, keystores and CA material.
   const tool = (max, message, handler) => [
+    auth.requireAuth,
     limiter(max, message),
     toolUpload,
     async (req, res) => {
@@ -139,7 +196,7 @@ function createApp({ allowPrivateHosts = false, enableRateLimit = true, corsOrig
     });
   }));
 
-  app.post('/api/validate-certificate', limiter(60, 'Too many requests, please try again shortly.'), upload.single('certificate'), async (req, res) => {
+  app.post('/api/validate-certificate', auth.requireAuth, limiter(60, 'Too many requests, please try again shortly.'), upload.single('certificate'), async (req, res) => {
     const password = req.body.password || '';
     const hostname = (req.body.hostname || '').trim() || undefined;
     const certText = req.body.certText;
@@ -154,7 +211,7 @@ function createApp({ allowPrivateHosts = false, enableRateLimit = true, corsOrig
     res.json(result);
   });
 
-  app.post('/api/check-host', limiter(10, 'Too many live checks, please try again in a minute.'), async (req, res) => {
+  app.post('/api/check-host', auth.requireAuth, limiter(10, 'Too many live checks, please try again in a minute.'), async (req, res) => {
     const { host, port } = req.body || {};
     try {
       const live = await fetchServerChain(host, port, { allowPrivate: allowPrivateHosts });
@@ -166,10 +223,10 @@ function createApp({ allowPrivateHosts = false, enableRateLimit = true, corsOrig
     }
   });
 
-  app.get('/api/algorithms', (req, res) => res.json({ algorithms: listAlgorithms() }));
+  app.get('/api/algorithms', auth.requireAuth, (req, res) => res.json({ algorithms: listAlgorithms() }));
 
   // Generated private keys are returned once in the response and never stored or logged by the server.
-  app.post('/api/generate-keypair', limiter(20, 'Too many key generation requests, please try again in a minute.'), async (req, res) => {
+  app.post('/api/generate-keypair', auth.requireAuth, limiter(20, 'Too many key generation requests, please try again in a minute.'), async (req, res) => {
     res.set('Cache-Control', 'no-store');
     try {
       res.json(await generateKeyPair(req.body || {}));
@@ -180,8 +237,44 @@ function createApp({ allowPrivateHosts = false, enableRateLimit = true, corsOrig
     }
   });
 
-  // JSON error responses for upload problems (size, type) and anything unexpected.
+  // ----- history: users see their own items, admins see everyone's -----
+  const isAdmin = req => req.user.role === 'admin';
+  // A user may only touch their own entries (admins any). Others get 404 so IDs cannot be probed.
+  const findAccessible = (req, id) => {
+    const entry = getStore().get(id);
+    return entry && (isAdmin(req) || entry.owner === req.user.username) ? entry : null;
+  };
+
+  app.get('/api/history', auth.requireAuth, (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    let owner = req.user.username;
+    if (isAdmin(req)) owner = typeof req.query.owner === 'string' && req.query.owner ? req.query.owner : null;
+    res.json({ history: getStore().list(owner), user: { username: req.user.username, role: req.user.role } });
+  });
+
+  app.post('/api/history', auth.requireAuth, limiter(60, 'Too many requests, please try again shortly.'), (req, res) => {
+    res.status(201).json({ entry: getStore().add(req.user.username, req.body) });
+  });
+
+  app.patch('/api/history/:id', auth.requireAuth, (req, res) => {
+    if (!findAccessible(req, req.params.id)) return res.status(404).json({ error: 'History item not found.' });
+    res.json({ entry: getStore().rename(req.params.id, (req.body || {}).name) });
+  });
+
+  app.delete('/api/history/:id', auth.requireAuth, (req, res) => {
+    if (!findAccessible(req, req.params.id)) return res.status(404).json({ error: 'History item not found.' });
+    getStore().delete(req.params.id);
+    res.json({ ok: true });
+  });
+
+  // Clears the signed-in user's own history only.
+  app.delete('/api/history', auth.requireAuth, (req, res) => {
+    res.json({ deleted: getStore().deleteAllFor(req.user.username) });
+  });
+
+  // JSON error responses for upload problems (size, type), bad history input and anything unexpected.
   app.use((err, req, res, next) => {
+    if (err instanceof HistoryError) return res.status(err.status).json({ error: err.message });
     if (err instanceof multer.MulterError) {
       const message = err.code === 'LIMIT_FILE_SIZE'
         ? `File too large (max ${MAX_UPLOAD_BYTES / 1024 / 1024} MB).`
@@ -202,8 +295,18 @@ function createApp({ allowPrivateHosts = false, enableRateLimit = true, corsOrig
 }
 
 if (require.main === module) {
+  let authConfig;
+  try {
+    authConfig = loadAuthConfig(process.env);
+  } catch (err) {
+    if (!(err instanceof AuthConfigError)) throw err;
+    console.error(`${err.message}\n\nSee sample.env. To run without a login for local development, set AUTH_DISABLED=1.`);
+    process.exit(1);
+  }
+  if (authConfig.disabled) console.warn('WARNING: AUTH_DISABLED is set. Everyone can use the app as an admin without signing in.');
+
   const PORT = process.env.PORT || 33003;
-  createApp({ allowPrivateHosts: process.env.ALLOW_PRIVATE_HOSTS === '1' }).listen(PORT, () => {
+  createApp({ auth: authConfig, allowPrivateHosts: process.env.ALLOW_PRIVATE_HOSTS === '1' }).listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 }
