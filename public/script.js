@@ -1122,6 +1122,103 @@ function showUser(user) {
   $('signOutBtn').hidden = !!user.authDisabled;
 }
 
+// ---------- release notes ("What's new") ----------
+
+const popover = $('releasePopover');
+const versionBtn = $('versionBtn');
+let notesHtml = null;
+let closeTimer = null;
+let pinned = false;   // opened by a click (or tap): stays open until dismissed
+
+// Bullets may use **bold** and `code`. The text is escaped first, so notes can never inject HTML.
+function inlineMarkup(text) {
+  return escapeHtml(text)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+}
+
+function sectionClass(title) {
+  const key = String(title).toLowerCase().replace(/[^a-z]/g, '');
+  return ['added', 'changed', 'fixed', 'removed', 'breaking', 'security'].includes(key) ? key : '';
+}
+
+function releaseSections(release) {
+  return release.sections.map(s => `<div class="rn-section">
+    <div class="rn-section-title ${sectionClass(s.title)}">${escapeHtml(s.title)}</div>
+    <ul class="rn-list">${s.items.map(item => `<li>${inlineMarkup(item)}</li>`).join('')}</ul>
+  </div>`).join('');
+}
+
+function renderReleaseNotes(data) {
+  const releases = data.releases || [];
+  if (!releases.length) return '<div class="rn-empty">No release notes yet.</div>';
+  const current = releases.find(r => r.version === data.version) || releases[0];
+  const older = releases.filter(r => r !== current);
+  const title = current.version === data.version ? `What's new in v${current.version}` : `Latest release notes: v${current.version}`;
+  return `<div class="rn-head"><div class="rn-title">${escapeHtml(title)}</div><div class="rn-date">${escapeHtml(current.date || '')}</div></div>
+    <div class="rn-body">
+      ${releaseSections(current)}
+      ${older.length ? `<details class="rn-older"><summary>Earlier releases (${older.length})</summary>
+        ${older.map(r => `<h4><span>v${escapeHtml(r.version)}</span><span class="rn-date">${escapeHtml(r.date || '')}</span></h4>${releaseSections(r)}`).join('')}
+      </details>` : ''}
+    </div>
+    <div class="rn-foot">Files, pasted text and any keys you supply are processed in memory and discarded after each request. Private keys are never stored on the server.</div>`;
+}
+
+async function loadReleaseNotes() {
+  if (notesHtml) return notesHtml;
+  try {
+    const response = await api('/api/release-notes');
+    if (!response.ok) throw new Error('unavailable');
+    notesHtml = renderReleaseNotes(await response.json());
+    return notesHtml;
+  } catch (err) {
+    return '<div class="rn-empty">Release notes could not be loaded.</div>';
+  }
+}
+
+async function openNotes() {
+  clearTimeout(closeTimer);
+  if (!popover.hidden) return;
+  popover.hidden = false;
+  versionBtn.setAttribute('aria-expanded', 'true');
+  popover.innerHTML = '<div class="rn-empty">Loading...</div>';
+  const html = await loadReleaseNotes();
+  if (!popover.hidden) popover.innerHTML = html;
+}
+
+function closeNotes() {
+  pinned = false;
+  clearTimeout(closeTimer);
+  popover.hidden = true;
+  versionBtn.setAttribute('aria-expanded', 'false');
+}
+
+// A short delay lets the pointer travel from the version button to the popover.
+function closeSoon() {
+  if (pinned) return;
+  clearTimeout(closeTimer);
+  closeTimer = setTimeout(closeNotes, 250);
+}
+
+versionBtn.addEventListener('mouseenter', openNotes);
+versionBtn.addEventListener('mouseleave', closeSoon);
+popover.addEventListener('mouseenter', () => clearTimeout(closeTimer));
+popover.addEventListener('mouseleave', closeSoon);
+versionBtn.addEventListener('focus', openNotes);
+versionBtn.addEventListener('blur', () => { if (!popover.matches(':hover')) closeSoon(); });
+versionBtn.addEventListener('click', () => {
+  if (pinned) return closeNotes();
+  pinned = true;
+  openNotes();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !popover.hidden) closeNotes();
+});
+document.addEventListener('click', e => {
+  if (!popover.hidden && !popover.contains(e.target) && !versionBtn.contains(e.target)) closeNotes();
+});
+
 // ---------- init ----------
 
 fetch('/api/version')

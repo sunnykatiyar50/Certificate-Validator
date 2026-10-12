@@ -22,7 +22,7 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 COPY --from=deps /app/node_modules node_modules
-COPY package.json server.js ./
+COPY package.json server.js CHANGELOG.md ./
 COPY lib lib
 COPY trust-data trust-data
 COPY public public

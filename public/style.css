@@ -150,26 +150,34 @@ h2 { margin-bottom: 14px; font-size: 1.1rem; }
   flex-direction: column;
   background: var(--sidebar);
   color: var(--sidebar-text);
-  padding: 22px 12px 16px;
-  overflow-y: auto;
+  padding: 20px 12px 12px;
+  overflow: hidden;   /* the nav scrolls on its own; the footer below stays pinned and always visible */
 }
 
 .brand {
   color: #fff;
-  font-size: 1.25rem;
+  font-size: 1.02rem;
   font-weight: 700;
   line-height: 1.2;
-  padding: 0 10px 18px;
+  white-space: nowrap;
+  padding: 0 8px 12px;
 }
 
 .nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+  margin-right: -6px;
+  padding-right: 6px;
 }
 
 .nav-group {
-  margin: 12px 10px 3px;
+  margin: 7px 10px 1px;
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -188,7 +196,7 @@ h2 { margin-bottom: 14px; font-size: 1.1rem; }
   color: var(--sidebar-text);
   font: inherit;
   text-align: left;
-  padding: 9px 10px;
+  padding: 5px 10px;
   cursor: pointer;
 }
 .nav-item:hover { background: rgba(255, 255, 255, 0.07); }
@@ -197,7 +205,6 @@ h2 { margin-bottom: 14px; font-size: 1.1rem; }
   color: #fff;
   font-weight: 600;
 }
-.nav-item.subtle { font-size: 0.88rem; padding: 7px 10px; color: var(--sidebar-muted); }
 
 .count {
   background: rgba(255, 255, 255, 0.2);
@@ -206,23 +213,108 @@ h2 { margin-bottom: 14px; font-size: 1.1rem; }
   font-size: 0.78rem;
 }
 
+/* Compact footer, always visible: who you are, the theme, and the version with its release notes. */
 .sidebar-foot {
-  margin-top: auto;
-  padding: 14px 2px 0;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 8px 0 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
   font-size: 0.78rem;
   color: var(--sidebar-muted);
 }
-.sidebar-foot p { margin: 10px 10px 8px; }
-#version { color: #6f7d90; margin: 0 10px; }
 
 .sidebar-user {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px;
-  margin-bottom: 6px;
+  flex-direction: column;
+  gap: 7px;
+  padding: 8px;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.06);
+}
+.user-row { display: flex; align-items: center; gap: 9px; }
+.signout-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  padding: 5px 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  border-radius: 7px;
+  color: #e6edf3;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.signout-btn:hover { background: rgba(239, 90, 80, 0.28); color: #fff; }
+
+/* Three-way theme switch: the selected option is highlighted, so a click always does what it says. */
+.theme-switch {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-2);
+}
+.theme-switch button {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 4px;
+  background: none;
+  border: none;
+  border-radius: 7px;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.theme-switch button:hover { color: var(--text); }
+.theme-switch button.active {
+  background: var(--accent);
+  color: #fff;
+}
+.sidebar .theme-switch {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+}
+.sidebar .theme-switch button { color: var(--sidebar-muted); }
+.sidebar .theme-switch button:hover { color: #fff; }
+.sidebar .theme-switch button.active { background: rgba(255, 255, 255, 0.16); color: #fff; }
+
+.version-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 10px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--sidebar-muted);
+  font: inherit;
+  cursor: pointer;
+}
+.version-btn:hover, .version-btn[aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+#version { font-weight: 600; }
+.version-hint {
+  font-size: 0.72rem;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(79, 140, 255, 0.22);
+  color: #b9d2ff;
 }
 .avatar {
   flex: none;
@@ -589,16 +681,92 @@ summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; }
   position: absolute;
   top: 16px;
   right: 16px;
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 5px 12px;
-  font: inherit;
-  font-size: 0.82rem;
-  color: var(--muted);
-  cursor: pointer;
 }
-.theme-corner:hover { background: var(--hover); }
+.theme-corner button { padding: 5px 10px; }
+
+/* ---------- release notes popover ("What's new") ---------- */
+
+.release-popover {
+  position: fixed;
+  left: 236px;              /* just right of the 224px sidebar */
+  bottom: 12px;
+  z-index: 50;
+  width: min(400px, calc(100vw - 252px));
+  max-height: min(70vh, 560px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+.release-popover[hidden] { display: none; }
+.rn-head {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.rn-title { font-size: 1rem; font-weight: 700; }
+.rn-date { color: var(--muted); font-size: 0.8rem; }
+.rn-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 16px 10px;
+}
+.rn-section { margin-top: 12px; }
+.rn-section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.rn-section-title::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.rn-section-title.added::before { background: #38d39f; }
+.rn-section-title.changed::before { background: var(--accent); }
+.rn-section-title.fixed::before { background: #e0a526; }
+.rn-section-title.breaking::before, .rn-section-title.removed::before { background: #ef5a50; }
+.rn-section-title.security::before { background: #9b6bff; }
+.rn-list { margin: 0; padding-left: 18px; }
+.rn-list li { margin: 0 0 5px; }
+.rn-list code {
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--chip);
+  font-family: Consolas, "SF Mono", Menlo, monospace;
+  font-size: 0.92em;
+}
+.rn-older { margin-top: 12px; padding: 0; border: none; border-top: 1px solid var(--border); border-radius: 0; }
+.rn-older > summary { padding: 10px 0 4px; font-size: 0.82rem; color: var(--muted); list-style: none; }
+.rn-older > summary::before { content: "\25B8  "; }
+.rn-older[open] > summary::before { content: "\25BE  "; }
+.rn-older h4 { margin: 12px 0 0; font-size: 0.9rem; display: flex; justify-content: space-between; align-items: baseline; }
+.rn-foot {
+  flex: none;
+  padding: 9px 16px 11px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+.rn-empty { padding: 18px 16px; color: var(--muted); }
 
 .login-card {
   width: min(100%, 400px);
@@ -633,14 +801,18 @@ summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; }
 
 @media (max-width: 860px) {
   .app { grid-template-columns: 1fr; }
-  .sidebar { position: static; height: auto; padding: 12px; }
+  .sidebar { position: static; height: auto; padding: 12px; overflow: visible; }
   .brand { padding: 0 6px 8px; }
   .brand br { display: none; }
-  .nav { flex-direction: row; flex-wrap: wrap; gap: 4px; }
-  .nav-group, .sidebar-foot p { display: none; }
+  .nav { flex-direction: row; flex-wrap: wrap; gap: 4px; overflow: visible; margin-right: 0; padding-right: 0; }
+  .nav-group { display: none; }
   .nav-item { width: auto; gap: 8px; padding: 7px 12px; }
-  .sidebar-foot { margin-top: 8px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
-  .sidebar-user { margin-bottom: 0; flex: 1 1 100%; }
+  .sidebar-foot { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 10px; }
+  .sidebar-user { flex: 1 1 100%; }
+  .theme-switch { flex: 1 1 auto; }
+  .version-btn { width: auto; gap: 8px; }
+  /* On narrow screens the notes open as a sheet at the bottom of the window. */
+  .release-popover { left: 12px; right: 12px; width: auto; bottom: 12px; max-height: 70vh; }
   .main { padding: 16px; }
   .view { grid-template-columns: minmax(0, 1fr); }
   .input { position: static; max-height: none; overflow: visible; }
