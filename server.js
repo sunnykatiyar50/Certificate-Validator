@@ -18,6 +18,9 @@ const { convert, ConvertError } = require('./lib/convert');
 const { decode } = require('./lib/decode');
 const { matchKeys } = require('./lib/match');
 const { createCa, signCsr, createCsr, CaError } = require('./lib/ca');
+const { issueDevCertificate } = require('./lib/devcert');
+const { createCrl } = require('./lib/crl');
+const { keyTools } = require('./lib/keytools');
 const { createAssetVersioner } = require('./lib/assets');
 const { version: PACKAGE_VERSION } = require('./package.json');
 
@@ -214,8 +217,35 @@ function createApp({
     const b = req.body || {};
     return signCsr(inputsFor(req, 'csr', 'csrText'), inputsFor(req, 'ca', 'caText'), {
       caPassword: b.caPassword, validityDays: b.validityDays, hash: b.hash, usage: b.usage,
-      copySans: b.copySans === undefined ? undefined : flag(b.copySans), sans: b.sans, pathLength: b.pathLength
+      copySans: b.copySans === undefined ? undefined : flag(b.copySans), sans: b.sans, pathLength: b.pathLength,
+      crlUrl: b.crlUrl
     });
+  }));
+
+  // Local development helpers. Like the other tools they take keys, so they need a session, run in memory and
+  // are never cached. A dev certificate comes with a new CA unless an existing CA is supplied.
+  app.post('/api/dev-cert', ...tool(20, 'Too many requests, please try again shortly.', req => {
+    const b = req.body || {};
+    return issueDevCertificate({
+      names: b.names, algorithm: b.algorithm, hash: b.hash, validityDays: b.validityDays, clientAuth: flag(b.clientAuth),
+      crlUrl: b.crlUrl, bundlePassword: b.bundlePassword,
+      caName: b.caName, caAlgorithm: b.caAlgorithm, caValidityDays: b.caValidityDays, scope: b.scope
+    }, { caInputs: inputsFor(req, 'ca', 'caText'), caPassword: b.caPassword });
+  }));
+
+  app.post('/api/crl/create', ...tool(30, 'Too many requests, please try again shortly.', req => {
+    const b = req.body || {};
+    const caInputs = inputsFor(req, 'ca', 'caText');
+    if (!caInputs.length) throw new InputError('Provide the CA certificate and private key that sign the CRL.');
+    return createCrl(caInputs, {
+      caPassword: b.caPassword, serials: b.serials, reason: b.reason, nextUpdateDays: b.nextUpdateDays, hash: b.hash,
+      certificateInputs: inputsFor(req, 'cert', 'certText'), previousCrlInputs: inputsFor(req, 'previous', 'previousText')
+    });
+  }));
+
+  app.post('/api/key-tools', ...tool(60, 'Too many requests, please try again shortly.', req => {
+    const b = req.body || {};
+    return keyTools(inputsFor(req, 'files', 'text'), { password: b.password, action: b.action, newPassword: b.newPassword });
   }));
 
   app.post('/api/validate-certificate', auth.requireAuth, limiter(60, 'Too many requests, please try again shortly.'), upload.single('certificate'), async (req, res) => {

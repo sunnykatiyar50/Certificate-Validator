@@ -58,7 +58,8 @@ async function sampleEntry(name, extra = {}) {
 // Every state-changing API route. All of them must require a session and the CSRF header.
 const TOOL_POSTS = [
   '/api/validate-certificate', '/api/check-host', '/api/generate-keypair', '/api/history',
-  '/api/convert', '/api/decode', '/api/match', '/api/csr/create', '/api/ca/create', '/api/ca/sign'
+  '/api/convert', '/api/decode', '/api/match', '/api/csr/create', '/api/ca/create', '/api/ca/sign',
+  '/api/dev-cert', '/api/crl/create', '/api/key-tools'
 ];
 
 // ---------- configuration ----------

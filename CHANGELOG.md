@@ -6,6 +6,16 @@ Add your notes under **Unreleased** as you work. `node scripts/release.js` moves
 
 ## Unreleased
 
+### Added
+- **Dev Certificate:** one click creates a local CA and a certificate for `localhost`, `127.0.0.1`, `::1` and your own names, with PEM, PFX, JKS, a trust store, a ZIP of everything and setup snippets for common servers.
+- **Name restrictions** when creating a CA, so it can only issue for local names or the ones you choose.
+- **Revoke / CRL:** create a CRL from your CA, revoke certificates or serials with a reason, and extend an earlier CRL. Signed certificates can include a CRL URL.
+- **Key Tools:** encrypt, decrypt or re-password a private key, convert between PKCS#1, PKCS#8 and SEC1, and extract the public key.
+
+### Fixed
+- A valid CRL without reason codes could show an invalid signature when decoded.
+- Converting to **PFX, JKS or DER** (and any other binary download) failed with "newId is not defined" since 2.0.0. They work again.
+
 ## 2.2.0 - 2026-10-12
 
 ### Added

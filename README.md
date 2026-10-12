@@ -32,6 +32,11 @@ A small web app for validating, decoding, converting and creating X.509 certific
 - **Create a CA:** a root CA, or an intermediate signed by a CA you supply. Choose the algorithm, validity and path length. The CA key is returned once and never stored.
 - **Sign a CSR:** issue a TLS server, TLS client or intermediate-CA certificate from a CSR with your CA. Names are copied from the CSR (or added), validity is limited to the CA's lifetime, and the result comes with the CA chain. The CA key is sent to the server for the request, held in memory and discarded.
 
+- **Dev certificate:** one click for a trusted-on-your-machine certificate (like mkcert). Creates a dev CA (or uses yours) and a leaf for `localhost`, `127.0.0.1`, `::1` and any names you add, then returns PEM, full chain, PFX, JKS, a trust store, a ZIP of everything, and copy-paste trust and server setup (Node, Vite, nginx, Caddy, Spring Boot, uvicorn, Go). Optionally limits the CA to local names so a leaked dev CA key cannot be used against real sites.
+- **Name restrictions:** Create CA can restrict a CA to chosen DNS names and IP ranges (name constraints, enforced by OpenSSL and Node TLS), with a "use local names" shortcut.
+- **Revoke / CRL:** build a CRL from your CA, revoke certificates or serial numbers with a reason, and add to an earlier CRL. Signed certificates can carry a CRL URL.
+- **Key tools** (under Convert): encrypt, decrypt or change the password of a private key, convert between PKCS#1, PKCS#8 and SEC1, and extract the public key and its SPKI pin.
+
 **Convert**
 - Convert between **PEM, DER, PKCS#7 (P7B), PFX/PKCS#12 and JKS**. Paste or upload the certificate, chain and key in any order and any mix; the chain is ordered leaf-first and the key is checked against the leaf. PFX files can use AES-256 or legacy 3DES for old Windows and Java; PEM private keys can be encrypted. RSA, ECDSA and Ed25519 keys are supported. CSRs and CRLs convert between PEM and DER.
 
@@ -48,7 +53,9 @@ lib/             certificate.js (parsing), analysis.js (chain/hostname/warnings)
                  assets.js (cache-busting fingerprints for the frontend files),
                  bundle.js (reads PEM/DER/P7B/PFX/JKS input), convert.js + jks.js (format conversion),
                  decode.js (CSR/CRL/bundle decoding), match.js (key matching), ca.js (local CA, CSR creation),
-                 sct.js (Certificate Transparency), rootStores.js (Apple/Chrome/Microsoft membership), keys.js
+                 sct.js (Certificate Transparency), rootStores.js (Apple/Chrome/Microsoft membership), keys.js,
+                 devcert.js (dev certificate bundle), crl.js + crlVerify.js (CRL creation and signature check),
+                 keytools.js (key encryption and format conversion), nameConstraints.js, zip.js
 trust-data/      root-stores.json and ct-logs.json (generated, see scripts/update-trust-data.js)
 public/          static frontend (HTML/CSS/JS, login page), served by the server
 test/            tests (node:test)
@@ -176,6 +183,9 @@ Uploads are limited to 1 MB and the supported extensions, are processed in memor
 | `POST /api/csr/create` | Multipart: `key` file or `keyText`, `keyPassword`, optional `cert`/`certText`, `commonName`, `sans`, `hash`, subject fields |
 | `POST /api/ca/create` | Multipart: `commonName`, `algorithm`, `hash`, `validityDays`, `pathLength`, subject fields; for an intermediate also `issuer` file or `issuerText` and `issuerPassword` |
 | `POST /api/ca/sign` | Multipart: `csr` file or `csrText`, `ca` file or `caText` (certificate + key), `caPassword`, `usage` (`server`, `client`, `both`, `ca`), `validityDays`, `sans`, `copySans`, `hash` |
+| `POST /api/dev-cert` | Multipart: `names`, `algorithm`, `validityDays`, `scope`, `clientAuth`, optional `caFiles`/`caText` + `caPassword` to reuse a CA, `bundlePassword`, `crlUrl`: returns the bundle files and a ZIP |
+| `POST /api/crl/create` | Multipart: CA `files`/`text` + `caPassword`, `serials`, `reason`, `certs`, `previous` CRL, `nextUpdateDays`: returns `ca.crl` (PEM and DER) |
+| `POST /api/key-tools` | Multipart: key `files`/`text`, `password`, `action` (`inspect`, `pkcs8`, `pkcs1`, `sec1`, `public`), `newPassword` |
 | `GET /api/algorithms` | Supported key algorithms |
 | `GET/POST/DELETE /api/history`, `PATCH/DELETE /api/history/:id` | The caller's history (admins: everyone's, `?owner=` filters). Private keys are rejected. |
 | `GET /api/version` | Running version (public) |
