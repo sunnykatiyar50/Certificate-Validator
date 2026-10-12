@@ -44,6 +44,7 @@ server.js        Express app and API routes
 lib/             certificate.js (parsing), analysis.js (chain/hostname/warnings),
                  liveCheck.js (live TLS fetch, SSRF protection), keygen.js (key generation),
                  auth.js (accounts, sessions), historyStore.js (per-user history in SQLite),
+                 assets.js (cache-busting fingerprints for the frontend files),
                  bundle.js (reads PEM/DER/P7B/PFX/JKS input), convert.js + jks.js (format conversion),
                  decode.js (CSR/CRL/bundle decoding), match.js (key matching), ca.js (local CA, CSR creation),
                  sct.js (Certificate Transparency), rootStores.js (Apple/Chrome/Microsoft membership), keys.js
@@ -119,6 +120,10 @@ You can also keep the settings in a `.env` file next to `docker-compose.yml`: co
 The app is then at [http://localhost:33003](http://localhost:33003). Compose settings: `ADMIN_PASSWORD` and `SESSION_SECRET` are required; `ADMIN_USERNAME`, `USERS`, `SESSION_TTL_HOURS`, `APP_VERSION`, `HOST_PORT` (default `33003`), `TRUST_PROXY` and `CORS_ORIGIN` are optional. The container runs as a non-root user with a read-only filesystem and has a `/healthz` health check. The history database is kept in the `cert-workbench-data` volume (mounted at `/app/data`), so it survives restarts and upgrades.
 
 If pulling the image is denied, the package is still private: make it public in the repository's Packages settings, or run `docker login ghcr.io`.
+
+**Behind a reverse proxy or CDN** (Nginx Proxy Manager, Traefik, Cloudflare, ...): the server adds a content fingerprint to the stylesheet and script links in its pages (`style.css?v=3f9a1c0d2b`), so a new release always loads new files even if the proxy caches static assets. Pages are never cached, and assets requested without a current fingerprint are marked `no-cache`. No cache purge is needed after an upgrade. If a page ever looks unstyled, open `/style.css` on your domain and compare it with the one on the server, and check the proxy's asset caching settings.
+
+The first line of the log shows which build is running, for example `Certificate Workbench v2.1.0 (Node.js v22.23.2)`, and the line when it is ready lists the version, whether sign-in is on, and the data folder.
 
 ## Authentication
 
