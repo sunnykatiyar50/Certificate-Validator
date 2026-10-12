@@ -114,6 +114,7 @@ function createApp({
     res.set('Cache-Control', 'no-store');
     res.type('html').send(assets.versionPage(fs.readFileSync(path.join(publicDir, file), 'utf8')));
   };
+  app.get('/favicon.ico', (req, res) => res.redirect(301, '/favicon.svg'));
   app.get(['/', '/index.html'], (req, res) => (auth.currentUser(req) ? sendPage(res, 'index.html') : res.redirect('/login.html')));
   app.get('/login.html', (req, res) => (auth.currentUser(req) ? res.redirect('/') : sendPage(res, 'login.html')));
 
