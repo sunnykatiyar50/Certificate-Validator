@@ -17,6 +17,14 @@ Add your notes under **Unreleased** as you work. `node scripts/release.js` moves
 ### Fixed
 - The theme control was below the visible part of the sidebar on typical laptop screens, so it looked like the theme did not work.
 
+## 2.1.1 - 2026-10-13
+
+### Added
+- The first line of the server log now shows the version, and the ready line lists the version, whether sign-in is on, and the data folder.
+
+### Fixed
+- Pages could look unstyled behind a reverse proxy or CDN that cached an old stylesheet after an upgrade. Stylesheet and script links now carry a content fingerprint, so a new release always loads the new files and no cache purge is needed.
+
 ## 2.1.0 - 2026-10-12
 
 ### Added

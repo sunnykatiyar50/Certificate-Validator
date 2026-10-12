@@ -1,5 +1,6 @@
 const express = require('express');
 const multer = require('multer');
+const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -17,6 +18,7 @@ const { convert, ConvertError } = require('./lib/convert');
 const { decode } = require('./lib/decode');
 const { matchKeys } = require('./lib/match');
 const { createCa, signCsr, createCsr, CaError } = require('./lib/ca');
+const { createAssetVersioner } = require('./lib/assets');
 const { version: PACKAGE_VERSION } = require('./package.json');
 
 // package.json is the single source of truth for the version; images are tagged from it.
@@ -48,7 +50,8 @@ function createApp({
   corsOrigin = process.env.CORS_ORIGIN,
   auth: authConfig = loadAuthConfig(process.env),
   historyStore = null,
-  dataDir = process.env.DATA_DIR || path.join(__dirname, 'data')
+  dataDir = process.env.DATA_DIR || path.join(__dirname, 'data'),
+  publicDir = path.join(__dirname, 'public')
 } = {}) {
   const app = express();
   app.disable('x-powered-by');
@@ -101,14 +104,25 @@ function createApp({
   app.get('/auth/status', auth.status);
 
   // ----- pages: the app itself needs a session, the login page is public -----
-  const publicDir = path.join(__dirname, 'public');
+  // Pages are never cached, and their style and script links carry a fingerprint of the file (style.css?v=...),
+  // so a proxy, CDN or browser holding an old copy of an asset can never be paired with a newer page.
+  const assets = createAssetVersioner(publicDir);
   const sendPage = (res, file) => {
     res.set('Cache-Control', 'no-store');
-    res.sendFile(path.join(publicDir, file));
+    res.type('html').send(assets.versionPage(fs.readFileSync(path.join(publicDir, file), 'utf8')));
   };
   app.get(['/', '/index.html'], (req, res) => (auth.currentUser(req) ? sendPage(res, 'index.html') : res.redirect('/login.html')));
   app.get('/login.html', (req, res) => (auth.currentUser(req) ? res.redirect('/') : sendPage(res, 'login.html')));
-  app.use(express.static(publicDir, { index: false }));
+
+  // A fingerprinted asset URL can be cached for a year because its URL changes with its content. Anything else
+  // (no fingerprint, or an old one from a stale page) must be revalidated every time.
+  app.use((req, res, next) => {
+    const name = req.path.slice(1);
+    const current = /\.(?:css|js)$/.test(name) && req.query.v && req.query.v === assets.hashOf(name);
+    res.set('Cache-Control', current ? 'public, max-age=31536000, immutable' : 'no-cache');
+    next();
+  });
+  app.use(express.static(publicDir, { index: false, cacheControl: false }));
 
   // ----- everything under /api (except /api/version) requires a signed-in user -----
   // Files are kept in memory and never written to disk.
@@ -308,6 +322,8 @@ function createApp({
 }
 
 if (require.main === module) {
+  // First line of the log, so it is always clear which build is running (even if the start-up fails below).
+  console.log(`Certificate Workbench v${APP_VERSION} (Node.js ${process.version})`);
   let authConfig;
   try {
     authConfig = loadAuthConfig(process.env);
@@ -320,7 +336,9 @@ if (require.main === module) {
 
   const PORT = process.env.PORT || 33003;
   createApp({ auth: authConfig, allowPrivateHosts: process.env.ALLOW_PRIVATE_HOSTS === '1' }).listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    const users = authConfig.accounts.filter(a => a.role === 'user').length;
+    const signIn = authConfig.disabled ? 'DISABLED' : `enabled (1 admin, ${users} user${users === 1 ? '' : 's'})`;
+    console.log(`Server running on http://localhost:${PORT} | v${APP_VERSION} | sign-in ${signIn} | data ${process.env.DATA_DIR || path.join(__dirname, 'data')}`);
   });
 }
 
