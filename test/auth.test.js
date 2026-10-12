@@ -418,3 +418,17 @@ test('the server refuses to start with missing or weak authentication settings',
   assert.equal(weak.status, 1);
   assert.match(weak.stderr, /at least 8/);
 });
+
+test('loading the history store does not print the SQLite experimental warning', () => {
+  const { spawnSync } = require('node:child_process');
+  const path = require('node:path');
+  const run = code => spawnSync(process.execPath, ['-e', code], { cwd: path.join(__dirname, '..'), encoding: 'utf8', timeout: 15000 });
+
+  const quiet = run("const { HistoryStore } = require('./lib/historyStore'); new HistoryStore(':memory:').close();");
+  assert.equal(quiet.status, 0, quiet.stderr);
+  assert.ok(!/SQLite/i.test(quiet.stderr), `unexpected warning: ${quiet.stderr}`);
+
+  // Only that one message is hidden; other warnings still reach the user.
+  const other = run("require('./lib/historyStore'); process.emitWarning('Other thing is experimental', 'ExperimentalWarning');");
+  assert.match(other.stderr, /Other thing is experimental/);
+});
