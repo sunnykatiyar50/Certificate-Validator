@@ -177,7 +177,7 @@ h2 { margin-bottom: 14px; font-size: 1.1rem; }
 }
 
 .nav-group {
-  margin: 9px 10px 2px;
+  margin: 7px 10px 1px;
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -196,7 +196,7 @@ h2 { margin-bottom: 14px; font-size: 1.1rem; }
   color: var(--sidebar-text);
   font: inherit;
   text-align: left;
-  padding: 6px 10px;
+  padding: 5px 10px;
   cursor: pointer;
 }
 .nav-item:hover { background: rgba(255, 255, 255, 0.07); }
@@ -218,9 +218,9 @@ h2 { margin-bottom: 14px; font-size: 1.1rem; }
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 8px;
-  padding: 10px 0 0;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 8px 0 0;
   border-top: 1px solid rgba(255, 255, 255, 0.09);
   font-size: 0.78rem;
   color: var(--sidebar-muted);
@@ -228,26 +228,30 @@ h2 { margin-bottom: 14px; font-size: 1.1rem; }
 
 .sidebar-user {
   display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 7px 8px;
+  flex-direction: column;
+  gap: 7px;
+  padding: 8px;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.06);
 }
-.icon-btn {
-  flex: none;
-  margin-left: auto;
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  background: none;
+.user-row { display: flex; align-items: center; gap: 9px; }
+.signout-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  padding: 5px 8px;
+  background: rgba(255, 255, 255, 0.08);
   border: none;
-  border-radius: 8px;
-  color: var(--sidebar-muted);
+  border-radius: 7px;
+  color: #e6edf3;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
   cursor: pointer;
 }
-.icon-btn:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.signout-btn:hover { background: rgba(239, 90, 80, 0.28); color: #fff; }
 
 /* Three-way theme switch: the selected option is highlighted, so a click always does what it says. */
 .theme-switch {
