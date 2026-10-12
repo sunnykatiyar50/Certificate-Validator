@@ -1,6 +1,6 @@
 # Certificate Validator
 
-A small web app for validating X.509 certificates and generating key pairs.
+A small web app for validating, decoding, converting and creating X.509 certificates, keys and CSRs.
 
 ## Features
 
@@ -11,18 +11,33 @@ A small web app for validating X.509 certificates and generating key pairs.
 - **Live site check:** enter `example.com` (and optionally a port) and the server fetches the certificate chain it presents, plus the TLS version and cipher.
 - **Warnings:** weak RSA keys, SHA-1/MD5 signatures, certificates expiring within 30 days, self-signed leaves, and validity periods over 398 days.
 
+**Inspect**
+- **Decode CSRs:** subject, public key, requested SANs, key usage and extensions, and whether the request's signature verifies.
+- **Decode CRLs:** issuer, dates, CRL number, signature check against an issuer certificate you supply, and every revoked serial. Add certificates next to the CRL to see which of them are listed.
+- **Decode bundles:** PKCS#7 / P7B, PEM bundles, PFX/P12 and JKS keystores are unpacked into the certificate report. Private keys are only described, never displayed.
+
 **Create**
 - **Generate keys:** create a key pair with a self-signed certificate, a CSR, or keys only. Supports RSA 2048/3072/4096, ECDSA P-256/P-384/P-521 and Ed25519, with SHA-256/384/512, SANs, subject fields, validity and a CA option. Results can be copied, downloaded as PEM, or sent straight to the validator.
 - **History:** generated key pairs are saved under a name (rename or delete any time). History is stored only in your browser's local storage, unencrypted, and you choose whether the private key is included. The server never stores generated keys.
+- **CSR from an existing key:** build a CSR for a key you already have (PEM, PFX or JKS), optionally copying the subject and names from the certificate you are renewing.
 
-Not covered yet: revocation checking (CRL/OCSP).
+**Local CA**
+- **Create a CA:** a root CA, or an intermediate signed by a CA you supply. Choose the algorithm, validity and path length. The CA key is returned once and never stored.
+- **Sign a CSR:** issue a TLS server, TLS client or intermediate-CA certificate from a CSR with your CA. Names are copied from the CSR (or added), validity is limited to the CA's lifetime, and the result comes with the CA chain. The CA key is sent to the server for the request, held in memory and discarded.
+
+**Convert**
+- Convert between **PEM, DER, PKCS#7 (P7B), PFX/PKCS#12 and JKS**. Paste or upload the certificate, chain and key in any order and any mix; the chain is ordered leaf-first and the key is checked against the leaf. PFX files can use AES-256 or legacy 3DES for old Windows and Java; PEM private keys can be encrypted. RSA, ECDSA and Ed25519 keys are supported. CSRs and CRLs convert between PEM and DER.
+
+Not covered yet: fetching revocation data online (OCSP, CRL downloads). A CRL you supply can be decoded and checked against certificates.
 
 ## Project structure
 
 ```
 server.js        Express app and API routes
 lib/             certificate.js (parsing), analysis.js (chain/hostname/warnings),
-                 liveCheck.js (live TLS fetch, SSRF protection), keygen.js (key generation)
+                 liveCheck.js (live TLS fetch, SSRF protection), keygen.js (key generation),
+                 bundle.js (reads PEM/DER/P7B/PFX/JKS input), convert.js + jks.js (format conversion),
+                 decode.js (CSR/CRL/bundle decoding), ca.js (local CA, CSR creation), keys.js
 public/          static frontend (HTML/CSS/JS), served by the server
 test/            tests (node:test)
 scripts/         release.js (version bump + tag)
@@ -105,9 +120,18 @@ Uploads are limited to 1 MB and the supported extensions, are processed in memor
 | `POST /api/validate-certificate` | Multipart form: `certificate` (file) or `certText`, plus optional `password` and `hostname` |
 | `POST /api/check-host` | JSON `{ "host": "example.com", "port": 443 }`: fetch and analyse a server's chain |
 | `POST /api/generate-keypair` | JSON options (`algorithm`, `output`, `commonName`, `sans`, `hash`, `validityDays`, ...): returns the keys and certificate or CSR. Nothing is stored. |
+| `POST /api/decode` | Multipart: `files` and/or `text` (CSR, CRL, P7B, PEM, PFX, JKS), optional `password` |
+| `POST /api/convert` | Multipart: `files` and/or `text`, `format` (`pem`, `der`, `p7b`, `pfx`, `jks`), `password`, `outputPassword`, `alias`, `legacy` |
+| `POST /api/csr/create` | Multipart: `key` file or `keyText`, `keyPassword`, optional `cert`/`certText`, `commonName`, `sans`, `hash`, subject fields |
+| `POST /api/ca/create` | Multipart: `commonName`, `algorithm`, `hash`, `validityDays`, `pathLength`, subject fields; for an intermediate also `issuer` file or `issuerText` and `issuerPassword` |
+| `POST /api/ca/sign` | Multipart: `csr` file or `csrText`, `ca` file or `caText` (certificate + key), `caPassword`, `usage` (`server`, `client`, `both`, `ca`), `validityDays`, `sans`, `copySans`, `hash` |
 | `GET /api/algorithms` | Supported key algorithms |
 | `GET /api/version` | Running version |
 | `GET /healthz` | Health check |
+
+## Private keys
+
+Endpoints that take private keys (convert, CSR creation, signing) process them in memory, send `Cache-Control: no-store`, and never log them.
 
 ## Tests
 
