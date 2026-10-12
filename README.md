@@ -10,11 +10,14 @@ A small web app for validating, decoding, converting and creating X.509 certific
 - **Hostname match:** enter a hostname to check it against the certificate's SANs (wildcards included).
 - **Live site check:** enter `example.com` (and optionally a port) and the server fetches the certificate chain it presents, plus the TLS version and cipher.
 - **Warnings:** weak RSA keys, SHA-1/MD5 signatures, certificates expiring within 30 days, self-signed leaves, and validity periods over 398 days.
+- **Root programs:** for a chain that reaches a root, see whether that root is in the Mozilla, Apple, Chrome and Microsoft root stores. Mozilla uses the store bundled with Node.js; the others use CCADB data saved in `trust-data/root-stores.json` (see [Root store data](#root-store-and-ct-log-data)).
+- **Certificate Transparency:** embedded SCTs are listed with the log name, operator and time, and publicly trusted certificates without any get an informational note. SCTs delivered in the TLS handshake or OCSP response are not checked.
 
 **Inspect**
 - **Decode CSRs:** subject, public key, requested SANs, key usage and extensions, and whether the request's signature verifies.
 - **Decode CRLs:** issuer, dates, CRL number, signature check against an issuer certificate you supply, and every revoked serial. Add certificates next to the CRL to see which of them are listed.
 - **Decode bundles:** PKCS#7 / P7B, PEM bundles, PFX/P12 and JKS keystores are unpacked into the certificate report. Private keys are only described, never displayed.
+- **Match a key pair:** compare the public keys of any mix of private keys, certificates and CSRs to confirm which belong together.
 
 **Create**
 - **Generate keys:** create a key pair with a self-signed certificate, a CSR, or keys only. Supports RSA 2048/3072/4096, ECDSA P-256/P-384/P-521 and Ed25519, with SHA-256/384/512, SANs, subject fields, validity and a CA option. Results can be copied, downloaded as PEM, or sent straight to the validator.
@@ -42,10 +45,13 @@ lib/             certificate.js (parsing), analysis.js (chain/hostname/warnings)
                  liveCheck.js (live TLS fetch, SSRF protection), keygen.js (key generation),
                  auth.js (accounts, sessions), historyStore.js (per-user history in SQLite),
                  bundle.js (reads PEM/DER/P7B/PFX/JKS input), convert.js + jks.js (format conversion),
-                 decode.js (CSR/CRL/bundle decoding), ca.js (local CA, CSR creation), keys.js
+                 decode.js (CSR/CRL/bundle decoding), match.js (key matching), ca.js (local CA, CSR creation),
+                 sct.js (Certificate Transparency), rootStores.js (Apple/Chrome/Microsoft membership), keys.js
+trust-data/      root-stores.json and ct-logs.json (generated, see scripts/update-trust-data.js)
 public/          static frontend (HTML/CSS/JS, login page), served by the server
 test/            tests (node:test)
-scripts/         release.js (version bump + tag), hash-password.js (password hashes, session secret)
+scripts/         release.js (version bump + tag), hash-password.js (password hashes, session secret),
+                 update-trust-data.js (refresh trust-data/)
 Dockerfile, docker-compose.yml, .github/workflows/docker.yml
 ```
 
@@ -158,6 +164,7 @@ Uploads are limited to 1 MB and the supported extensions, are processed in memor
 | `POST /api/check-host` | JSON `{ "host": "example.com", "port": 443 }`: fetch and analyse a server's chain |
 | `POST /api/generate-keypair` | JSON options (`algorithm`, `output`, `commonName`, `sans`, `hash`, `validityDays`, ...): returns the keys and certificate or CSR. Nothing is stored. |
 | `POST /api/decode` | Multipart: `files` and/or `text` (CSR, CRL, P7B, PEM, PFX, JKS), optional `password` |
+| `POST /api/match` | Multipart: `files` and/or `text` holding keys, certificates and CSRs, optional `password` |
 | `POST /api/convert` | Multipart: `files` and/or `text`, `format` (`pem`, `der`, `p7b`, `pfx`, `jks`), `password`, `outputPassword`, `alias`, `legacy` |
 | `POST /api/csr/create` | Multipart: `key` file or `keyText`, `keyPassword`, optional `cert`/`certText`, `commonName`, `sans`, `hash`, subject fields |
 | `POST /api/ca/create` | Multipart: `commonName`, `algorithm`, `hash`, `validityDays`, `pathLength`, subject fields; for an intermediate also `issuer` file or `issuerText` and `issuerPassword` |
@@ -167,7 +174,15 @@ Uploads are limited to 1 MB and the supported extensions, are processed in memor
 | `GET /api/version` | Running version (public) |
 | `GET /healthz` | Health check (public) |
 
-## Private keys
+## Root store and CT log data
+
+Apple, Chrome and Microsoft root membership and Certificate Transparency log names are saved in `trust-data/` so the app works offline. Refresh them from the [CCADB](https://www.ccadb.org/) and Google's public log list with:
+
+```bash
+npm run update-trust-data
+```
+
+Microsoft membership is limited to roots with the Server Authentication purpose and Chrome's store is TLS-only. Apple's list includes every root in Apple's program, whatever its purpose. Mozilla needs no file: Node.js bundles its current store.
 
 Endpoints that take private keys (convert, CSR creation, signing) process them in memory, send `Cache-Control: no-store`, and never log them.
 

@@ -14,6 +14,7 @@ const { KeyError } = require('./lib/keys');
 const { JksError } = require('./lib/jks');
 const { convert, ConvertError } = require('./lib/convert');
 const { decode } = require('./lib/decode');
+const { matchKeys } = require('./lib/match');
 const { createCa, signCsr, createCsr, CaError } = require('./lib/ca');
 const { version: PACKAGE_VERSION } = require('./package.json');
 
@@ -172,6 +173,12 @@ function createApp({
     const inputs = inputsFor(req, 'files', 'text');
     if (!inputs.length) throw new InputError('Provide a file or paste some text to decode.');
     return decode(inputs, { password: (req.body || {}).password });
+  }));
+
+  app.post('/api/match', ...tool(60, 'Too many requests, please try again shortly.', req => {
+    const inputs = inputsFor(req, 'files', 'text');
+    if (!inputs.length) throw new InputError('Provide at least one file or some pasted text.');
+    return matchKeys(inputs, { password: (req.body || {}).password });
   }));
 
   app.post('/api/csr/create', ...tool(30, 'Too many requests, please try again shortly.', req => {

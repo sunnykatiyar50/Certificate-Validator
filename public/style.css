@@ -660,6 +660,8 @@ summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; }
 }
 /* ---------- converter, decoder and CA tools ---------- */
 
+.panel .mono { overflow-wrap: anywhere; }
+.platforms { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px; }
 .file-note { padding: 8px 12px; font-size: 0.85rem; }
 .pem-block + .file-note, .file-note + .pem-block { margin-top: 0; }
 .table-wrap { max-height: 320px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }

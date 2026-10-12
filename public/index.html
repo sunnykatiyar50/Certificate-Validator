@@ -18,6 +18,7 @@
         <button type="button" class="nav-item" data-view="live">Live Site</button>
         <div class="nav-group">Inspect</div>
         <button type="button" class="nav-item" data-view="decode">Decode CSR / CRL</button>
+        <button type="button" class="nav-item" data-view="match">Match Key Pair</button>
         <div class="nav-group">Create</div>
         <button type="button" class="nav-item" data-view="generate">Generate Keys</button>
         <button type="button" class="nav-item" data-view="csr">CSR from Key</button>
@@ -202,6 +203,25 @@
           </form>
         </div>
         <div class="output" id="result-decode" data-empty="Decoded details will appear here."></div>
+      </section>
+
+      <section class="view" id="view-match">
+        <div class="input card">
+          <h2>Match a key, certificate and CSR</h2>
+          <form id="matchForm" class="form">
+            <label for="matchFiles">Files <span class="hint">Any mix of private key, certificate, CSR, PFX/P12 or JKS</span></label>
+            <input type="file" id="matchFiles" accept=".pem,.crt,.cer,.der,.cert,.csr,.key,.pfx,.p12,.jks,.keystore" multiple>
+            <label for="matchText">Or paste text</label>
+            <textarea id="matchText" rows="9" placeholder="Paste a private key, a certificate and/or a CSR (PEM). They can be pasted one after another."></textarea>
+            <input type="password" id="matchPassword" placeholder="Password (encrypted key, PFX/P12 or JKS, optional)" autocomplete="off">
+            <p class="hint">The public key inside each item is compared, so you can confirm that a certificate was issued for your key, or that a CSR belongs to it. Private keys are processed in memory and never stored.</p>
+            <div class="actions">
+              <button type="submit" class="btn primary">Compare</button>
+              <button type="button" class="btn" data-action="clear" data-ids="matchFiles,matchText,matchPassword" data-out="result-match">Clear</button>
+            </div>
+          </form>
+        </div>
+        <div class="output" id="result-match" data-empty="The comparison will appear here."></div>
       </section>
 
       <section class="view" id="view-csr">

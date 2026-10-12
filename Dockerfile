@@ -24,6 +24,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules node_modules
 COPY package.json server.js ./
 COPY lib lib
+COPY trust-data trust-data
 COPY public public
 COPY scripts/hash-password.js scripts/hash-password.js
 
