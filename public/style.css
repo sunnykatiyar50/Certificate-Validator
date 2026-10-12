@@ -130,7 +130,7 @@ body {
 }
 
 h1, h2 { margin: 0; }
-h2 { margin-bottom: 14px; font-size: 1.1rem; }
+h2 { margin-bottom: 10px; font-size: 1.02rem; }
 
 [hidden] { display: none !important; }
 
@@ -138,7 +138,7 @@ h2 { margin-bottom: 14px; font-size: 1.1rem; }
 
 .app {
   display: grid;
-  grid-template-columns: 224px minmax(0, 1fr);
+  grid-template-columns: 212px minmax(0, 1fr);
   min-height: 100vh;
 }
 
@@ -150,17 +150,17 @@ h2 { margin-bottom: 14px; font-size: 1.1rem; }
   flex-direction: column;
   background: var(--sidebar);
   color: var(--sidebar-text);
-  padding: 20px 12px 12px;
+  padding: 14px 10px 10px;
   overflow: hidden;   /* the nav scrolls on its own; the footer below stays pinned and always visible */
 }
 
 .brand {
   color: #fff;
-  font-size: 1.02rem;
+  font-size: 0.98rem;
   font-weight: 700;
   line-height: 1.2;
   white-space: nowrap;
-  padding: 0 8px 12px;
+  padding: 0 8px 8px;
 }
 
 .nav {
@@ -177,16 +177,16 @@ h2 { margin-bottom: 14px; font-size: 1.1rem; }
 }
 
 .nav-group {
-  margin: 14px 4px 4px;
-  padding: 8px 8px 4px;
+  margin: 8px 2px 2px;
+  padding: 7px 8px 3px;
   border-top: 1px solid rgba(255, 255, 255, 0.12);
-  font-size: 0.82rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: #e6edf6;
+  color: #dfe7f2;
 }
-.nav-group:first-child { margin-top: 2px; border-top: none; }
+.nav-group:first-child { margin-top: 0; border-top: none; padding-top: 2px; }
 
 .nav-item {
   display: flex;
@@ -195,11 +195,12 @@ h2 { margin-bottom: 14px; font-size: 1.1rem; }
   width: 100%;
   background: none;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   color: var(--sidebar-text);
   font: inherit;
+  font-size: 0.9rem;
   text-align: left;
-  padding: 5px 10px 5px 18px;
+  padding: 4px 8px 4px 16px;
   cursor: pointer;
 }
 .nav-item:hover { background: rgba(255, 255, 255, 0.07); }
@@ -321,8 +322,8 @@ h2 { margin-bottom: 14px; font-size: 1.1rem; }
 }
 .avatar {
   flex: none;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -335,7 +336,7 @@ h2 { margin-bottom: 14px; font-size: 1.1rem; }
 .user-name { color: #fff; font-weight: 600; font-size: 0.92rem; overflow-wrap: anywhere; line-height: 1.2; }
 
 .main {
-  padding: 32px 40px 56px;
+  padding: 20px 28px 36px;
   min-width: 0;
 }
 
@@ -343,8 +344,8 @@ h2 { margin-bottom: 14px; font-size: 1.1rem; }
 
 .view {
   display: none;
-  grid-template-columns: minmax(340px, 440px) minmax(0, 1fr);
-  gap: 28px;
+  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  gap: 20px;
   align-items: start;
   max-width: 1680px;
   margin: 0 auto;
@@ -357,13 +358,13 @@ h2 { margin-bottom: 14px; font-size: 1.1rem; }
   border-radius: 10px;
 }
 
-.card { padding: 22px 22px 24px; }
+.card { padding: 16px 16px 18px; }
 
 /* Sticky, but never taller than the window: a tall form scrolls inside itself so its last fields stay reachable. */
 .input {
   position: sticky;
-  top: 32px;
-  max-height: calc(100vh - 64px);
+  top: 20px;
+  max-height: calc(100vh - 40px);
   overflow-y: auto;
 }
 
@@ -392,12 +393,12 @@ h2 { margin-bottom: 14px; font-size: 1.1rem; }
 .form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 label {
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.86rem;
   color: var(--label);
 }
 .hint {
@@ -411,7 +412,7 @@ p.hint { margin: 0; }
 
 input[type="text"], input[type="password"], input[type="number"], textarea, select {
   width: 100%;
-  padding: 9px 11px;
+  padding: 6px 9px;
   border: 1px solid var(--input-border);
   border-radius: 6px;
   font: inherit;
@@ -422,14 +423,14 @@ input:focus, textarea:focus, select:focus {
   border-color: var(--accent);
   outline: 2px solid var(--focus-ring);
 }
-textarea { resize: vertical; min-height: 70px; }
-input[type="file"] { padding: 6px 0; font: inherit; color: inherit; }
+textarea { resize: vertical; min-height: 56px; }
+input[type="file"] { padding: 2px 0; font: inherit; color: inherit; }
 input:disabled, select:disabled { background: var(--disabled-bg); color: var(--disabled-text); }
 
 .two-col {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 8px;
   align-items: end;
 }
 .host-row { display: flex; gap: 10px; }
@@ -440,26 +441,26 @@ input:disabled, select:disabled { background: var(--disabled-bg); color: var(--d
   display: flex;
   align-items: center;
   gap: 8px;
-  padding-bottom: 9px;
+  padding-bottom: 6px;
 }
 .check input { width: auto; }
 
 details {
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 8px 10px;
+  padding: 6px 9px;
 }
-summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; }
+summary { cursor: pointer; font-weight: 600; font-size: 0.86rem; }
 .details-body { margin-top: 10px; }
 
-.actions { display: flex; gap: 10px; margin-top: 4px; }
+.actions { display: flex; gap: 8px; margin-top: 2px; }
 
 .btn {
   border: 1px solid var(--input-border);
   background: var(--surface);
   color: var(--label);
   border-radius: 6px;
-  padding: 9px 18px;
+  padding: 7px 14px;
   font: inherit;
   font-weight: 600;
   cursor: pointer;
@@ -488,8 +489,8 @@ summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; }
 .panel-title { font-weight: 600; margin-bottom: 4px; }
 
 .cert {
-  padding: 18px 22px 20px;
-  margin-bottom: 18px;
+  padding: 14px 16px 16px;
+  margin-bottom: 12px;
   font-size: 0.9rem;
   container-type: inline-size;
 }
@@ -516,7 +517,7 @@ summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; }
 .notice .btn { margin-left: 8px; }
 
 .section-title {
-  margin: 14px 0 4px;
+  margin: 10px 0 3px;
   font-size: 0.74rem;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -525,8 +526,8 @@ summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; }
 }
 .details {
   display: grid;
-  grid-template-columns: 160px minmax(0, 1fr);
-  gap: 6px 14px;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 4px 12px;
   margin: 0;
 }
 .details dt { color: var(--muted); }

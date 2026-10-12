@@ -20,20 +20,20 @@
         <div class="nav-group">Inspect</div>
         <button type="button" class="nav-item" data-view="decode">Decode CSR / CRL</button>
         <button type="button" class="nav-item" data-view="match">Match Key Pair</button>
-        <div class="nav-group">Create</div>
+        <div class="nav-group">Keys &amp; CSRs</div>
         <button type="button" class="nav-item" data-view="generate">Generate Keys</button>
         <button type="button" class="nav-item" data-view="csr">CSR from Key</button>
+        <button type="button" class="nav-item" data-view="key-tools">Key Tools</button>
         <button type="button" class="nav-item" data-view="history">History <span id="historyCount" class="count" hidden></span></button>
-        <div class="nav-group">Local CA</div>
-        <button type="button" class="nav-item" data-view="dev-cert">Dev Certificate</button>
+        <div class="nav-group">Certificate Authority</div>
         <button type="button" class="nav-item" data-view="cas">My CAs <span id="casCount" class="count" hidden></span></button>
-        <button type="button" class="nav-item" data-view="issue">Issue Certificate</button>
         <button type="button" class="nav-item" data-view="ca-create">Create CA</button>
+        <button type="button" class="nav-item" data-view="issue">Issue Certificate</button>
         <button type="button" class="nav-item" data-view="ca-sign">Sign a CSR</button>
         <button type="button" class="nav-item" data-view="crl">Revoke / CRL</button>
-        <div class="nav-group">Convert</div>
+        <div class="nav-group">Developer</div>
+        <button type="button" class="nav-item" data-view="dev-cert">Dev Certificate</button>
         <button type="button" class="nav-item" data-view="convert">Convert Formats</button>
-        <button type="button" class="nav-item" data-view="key-tools">Key Tools</button>
       </nav>
       <div class="sidebar-foot">
         <div class="sidebar-user" id="userChip" hidden>
@@ -177,9 +177,9 @@
 
             <label for="genHistory">Save to history</label>
             <select id="genHistory">
-              <option value="with">Yes, and keep the private key in this browser</option>
-              <option value="server">Yes, and keep the private key on the server (encrypted)</option>
-              <option value="without">Yes, without the private key</option>
+              <option value="with">Yes, key kept in this browser</option>
+              <option value="server">Yes, key kept on the server (encrypted)</option>
+              <option value="without">Yes, without the key</option>
               <option value="none">No, don't save</option>
             </select>
             <p class="hint">History is saved on the server under your account (administrators can see everyone's history, never your keys). A private key is only kept if you choose to: in this browser (unencrypted) or on the server, where it is encrypted and only you can read it.</p>
@@ -535,9 +535,9 @@
             </details>
             <label for="issueSave">Save to history</label>
             <select id="issueSave">
-              <option value="with">Yes, and keep the private key in this browser</option>
-              <option value="server">Yes, and keep the private key on the server (encrypted)</option>
-              <option value="without">Yes, without the private key</option>
+              <option value="with">Yes, key kept in this browser</option>
+              <option value="server">Yes, key kept on the server (encrypted)</option>
+              <option value="without">Yes, without the key</option>
               <option value="none">No, don't save</option>
             </select>
             <div class="actions">
