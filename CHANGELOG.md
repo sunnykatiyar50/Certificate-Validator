@@ -6,6 +6,12 @@ Add your notes under **Unreleased** as you work. `node scripts/release.js` moves
 
 ## Unreleased
 
+### Added
+- A **favicon** for the app and the login page.
+
+### Changed
+- Sidebar section titles (Validate, Inspect, Create...) are larger and brighter, with a divider above each and the items indented beneath, so titles and options are easy to tell apart.
+
 ## 2.3.0 - 2026-10-12
 
 ### Added
