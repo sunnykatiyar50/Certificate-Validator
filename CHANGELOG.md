@@ -6,6 +6,8 @@ Add your notes under **Unreleased** as you work. `node scripts/release.js` moves
 
 ## Unreleased
 
+## 2.4.1 - 2026-10-12
+
 ### Changed
 - A more compact layout: tighter spacing in the sidebar, forms and results, so more fits on screen.
 - The sidebar menu is regrouped: **Validate**, **Inspect**, **Keys & CSRs** (Generate Keys, CSR from Key, Key Tools, History), **Certificate Authority** (My CAs, Create CA, Issue Certificate, Sign a CSR, Revoke / CRL) and **Developer** (Dev Certificate, Convert Formats).
