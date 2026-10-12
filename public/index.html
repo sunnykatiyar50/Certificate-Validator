@@ -15,12 +15,20 @@
         <button type="button" class="nav-item active" data-view="file">File Upload</button>
         <button type="button" class="nav-item" data-view="text">Paste Text</button>
         <button type="button" class="nav-item" data-view="live">Live Site</button>
+        <div class="nav-group">Inspect</div>
+        <button type="button" class="nav-item" data-view="decode">Decode CSR / CRL</button>
         <div class="nav-group">Create</div>
         <button type="button" class="nav-item" data-view="generate">Generate Keys</button>
+        <button type="button" class="nav-item" data-view="csr">CSR from Key</button>
         <button type="button" class="nav-item" data-view="history">History <span id="historyCount" class="count" hidden></span></button>
+        <div class="nav-group">Local CA</div>
+        <button type="button" class="nav-item" data-view="ca-create">Create CA</button>
+        <button type="button" class="nav-item" data-view="ca-sign">Sign a CSR</button>
+        <div class="nav-group">Convert</div>
+        <button type="button" class="nav-item" data-view="convert">Convert Formats</button>
       </nav>
       <div class="sidebar-foot">
-        <p>Uploaded files and pasted text are discarded right after validation. Generated keys are never stored on the server; history lives only in this browser.</p>
+        <p>Uploaded files, pasted text and any keys you supply are processed in memory and discarded right after the request. Generated keys are never stored on the server; history lives only in this browser.</p>
         <div id="version"></div>
       </div>
     </aside>
@@ -160,6 +168,234 @@
           <div id="historyList" class="history-list"></div>
         </div>
         <div class="output" id="result-history" data-empty="Select an item to see its details."></div>
+      </section>
+
+      <section class="view" id="view-decode">
+        <div class="input card">
+          <h2>Decode a CSR, CRL or bundle</h2>
+          <form id="decodeForm" class="form">
+            <label for="decodeFiles">Files <span class="hint">CSR, CRL, PKCS#7 (P7B), PEM bundle, PFX/P12 or JKS &middot; max 1 MB each</span></label>
+            <input type="file" id="decodeFiles" accept=".pem,.crt,.cer,.der,.cert,.csr,.crl,.p7b,.p7c,.pfx,.p12,.jks,.keystore,.key" multiple>
+            <label for="decodeText">Or paste text</label>
+            <textarea id="decodeText" rows="7" placeholder="-----BEGIN CERTIFICATE REQUEST----- ... or -----BEGIN X509 CRL----- ... or -----BEGIN PKCS7-----"></textarea>
+            <input type="password" id="decodePassword" placeholder="Password (PFX/P12, JKS or encrypted key, optional)" autocomplete="off">
+            <p class="hint">Add a CRL together with certificates to see whether any of them are on the list. Private keys are never shown, only described.</p>
+            <div class="actions">
+              <button type="submit" class="btn primary">Decode</button>
+              <button type="button" class="btn" data-action="clear" data-ids="decodeFiles,decodeText,decodePassword" data-out="result-decode">Clear</button>
+            </div>
+          </form>
+        </div>
+        <div class="output" id="result-decode" data-empty="Decoded details will appear here."></div>
+      </section>
+
+      <section class="view" id="view-csr">
+        <div class="input card">
+          <h2>Create a CSR from an existing key</h2>
+          <form id="csrForm" class="form">
+            <label for="csrKeyFiles">Private key <span class="hint">PEM key, PFX/P12 or JKS</span></label>
+            <input type="file" id="csrKeyFiles" accept=".pem,.key,.der,.pfx,.p12,.jks,.keystore">
+            <textarea id="csrKeyText" rows="4" placeholder="Or paste the private key (PEM)"></textarea>
+            <input type="password" id="csrKeyPassword" placeholder="Key password (encrypted key, PFX/P12 or JKS, optional)" autocomplete="off">
+
+            <details>
+              <summary>Renewing? Copy the subject and names from a certificate</summary>
+              <div class="form details-body">
+                <input type="file" id="csrCertFiles" accept=".pem,.crt,.cer,.der,.cert">
+                <textarea id="csrCertText" rows="4" placeholder="Or paste the existing certificate (PEM)"></textarea>
+                <p class="hint">Leave the fields below empty to reuse its subject and subject alternative names.</p>
+              </div>
+            </details>
+
+            <label for="csrCommonName">Common name</label>
+            <input type="text" id="csrCommonName" maxlength="64" placeholder="example.com" autocomplete="off">
+            <label for="csrSans">Subject alternative names <span class="hint">Hosts, IPs, emails or URLs, separated by spaces or commas</span></label>
+            <textarea id="csrSans" rows="2" placeholder="www.example.com, *.example.com, 10.0.0.5"></textarea>
+            <div class="two-col">
+              <div>
+                <label for="csrHash">Signature hash</label>
+                <select id="csrHash">
+                  <option value="SHA-256">SHA-256</option>
+                  <option value="SHA-384">SHA-384</option>
+                  <option value="SHA-512">SHA-512</option>
+                </select>
+              </div>
+              <div></div>
+            </div>
+            <details>
+              <summary>More subject details</summary>
+              <div class="form details-body">
+                <input type="text" id="csrOrg" maxlength="64" placeholder="Organization (O)" autocomplete="off">
+                <input type="text" id="csrOu" maxlength="64" placeholder="Organizational unit (OU)" autocomplete="off">
+                <div class="two-col">
+                  <input type="text" id="csrCountry" maxlength="2" placeholder="Country (US)" autocomplete="off">
+                  <input type="text" id="csrState" maxlength="64" placeholder="State" autocomplete="off">
+                </div>
+                <input type="text" id="csrLocality" maxlength="64" placeholder="City / locality" autocomplete="off">
+              </div>
+            </details>
+            <p class="hint">The key is used only to sign the request, in memory. It is not stored or returned.</p>
+            <div class="actions">
+              <button type="submit" class="btn primary">Create CSR</button>
+            </div>
+          </form>
+        </div>
+        <div class="output" id="result-csr" data-empty="Your CSR will appear here."></div>
+      </section>
+
+      <section class="view" id="view-ca-create">
+        <div class="input card">
+          <h2>Create a certificate authority</h2>
+          <form id="caCreateForm" class="form">
+            <label for="caKind">Type</label>
+            <select id="caKind">
+              <option value="root">Root CA (self-signed)</option>
+              <option value="intermediate">Intermediate CA (signed by another CA)</option>
+            </select>
+
+            <div id="caParent" class="form" hidden>
+              <label for="caParentFiles">Parent CA certificate and private key <span class="hint">PEM files, PFX/P12 or JKS</span></label>
+              <input type="file" id="caParentFiles" accept=".pem,.crt,.cer,.key,.pfx,.p12,.jks,.keystore" multiple>
+              <textarea id="caParentText" rows="4" placeholder="Or paste the parent certificate and its private key (PEM)"></textarea>
+              <input type="password" id="caParentPassword" placeholder="Password (encrypted key, PFX/P12 or JKS, optional)" autocomplete="off">
+              <p class="hint warn-text">The parent's private key is sent to this server to sign, held in memory only and never stored.</p>
+            </div>
+
+            <label for="caCommonName">Common name</label>
+            <input type="text" id="caCommonName" maxlength="64" placeholder="My Lab Root CA" autocomplete="off">
+            <div class="two-col">
+              <div>
+                <label for="caAlgorithm">Algorithm</label>
+                <select id="caAlgorithm">
+                  <option value="ECDSA-P256">ECDSA P-256</option>
+                  <option value="ECDSA-P384">ECDSA P-384</option>
+                  <option value="RSA-2048">RSA 2048</option>
+                  <option value="RSA-3072">RSA 3072</option>
+                  <option value="RSA-4096">RSA 4096</option>
+                  <option value="Ed25519">Ed25519</option>
+                </select>
+              </div>
+              <div>
+                <label for="caHash">Signature hash</label>
+                <select id="caHash">
+                  <option value="SHA-256">SHA-256</option>
+                  <option value="SHA-384">SHA-384</option>
+                  <option value="SHA-512">SHA-512</option>
+                </select>
+              </div>
+            </div>
+            <div class="two-col">
+              <div>
+                <label for="caValidity">Validity (days)</label>
+                <input type="number" id="caValidity" value="3650" min="1" max="7300">
+              </div>
+              <div>
+                <label for="caPathLength">Path length <span class="hint">Optional</span></label>
+                <input type="number" id="caPathLength" min="0" max="10" placeholder="No limit">
+              </div>
+            </div>
+            <p class="hint">Path length limits how many CAs may sit below this one. 0 means it can only sign end-entity certificates.</p>
+            <details>
+              <summary>More subject details</summary>
+              <div class="form details-body">
+                <input type="text" id="caOrg" maxlength="64" placeholder="Organization (O)" autocomplete="off">
+                <input type="text" id="caOu" maxlength="64" placeholder="Organizational unit (OU)" autocomplete="off">
+                <div class="two-col">
+                  <input type="text" id="caCountry" maxlength="2" placeholder="Country (US)" autocomplete="off">
+                  <input type="text" id="caState" maxlength="64" placeholder="State" autocomplete="off">
+                </div>
+                <input type="text" id="caLocality" maxlength="64" placeholder="City / locality" autocomplete="off">
+              </div>
+            </details>
+            <p class="hint warn-text">The CA private key is returned once and never stored on the server. Copy or download it now; anyone who has it can issue certificates your devices will trust.</p>
+            <div class="actions">
+              <button type="submit" class="btn primary">Create CA</button>
+            </div>
+          </form>
+        </div>
+        <div class="output" id="result-ca-create" data-empty="Your new CA will appear here."></div>
+      </section>
+
+      <section class="view" id="view-ca-sign">
+        <div class="input card">
+          <h2>Sign a CSR with your CA</h2>
+          <form id="caSignForm" class="form">
+            <label for="signCsrFiles">Certificate signing request <span class="hint">.csr file or PEM text</span></label>
+            <input type="file" id="signCsrFiles" accept=".csr,.pem,.der">
+            <textarea id="signCsrText" rows="4" placeholder="-----BEGIN CERTIFICATE REQUEST-----"></textarea>
+
+            <label for="signCaFiles">CA certificate and private key <span class="hint">PEM files, PFX/P12 or JKS. Add intermediates to include them in the chain.</span></label>
+            <input type="file" id="signCaFiles" accept=".pem,.crt,.cer,.key,.pfx,.p12,.jks,.keystore" multiple>
+            <textarea id="signCaText" rows="4" placeholder="Or paste the CA certificate and its private key (PEM)"></textarea>
+            <input type="password" id="signCaPassword" placeholder="Password (encrypted key, PFX/P12 or JKS, optional)" autocomplete="off">
+            <p class="hint warn-text">The CA private key is sent to this server to sign, held in memory only and never stored.</p>
+
+            <div class="two-col">
+              <div>
+                <label for="signUsage">Certificate type</label>
+                <select id="signUsage">
+                  <option value="server">TLS server</option>
+                  <option value="client">TLS client</option>
+                  <option value="both">TLS server and client</option>
+                  <option value="ca">Intermediate CA</option>
+                </select>
+              </div>
+              <div>
+                <label for="signValidity">Validity (days)</label>
+                <input type="number" id="signValidity" value="90" min="1" max="3650">
+              </div>
+            </div>
+            <label for="signSans">Extra subject alternative names <span class="hint">Added to any names in the CSR</span></label>
+            <textarea id="signSans" rows="2" placeholder="www.example.com, 10.0.0.5"></textarea>
+            <div class="two-col">
+              <div>
+                <label for="signHash">Signature hash</label>
+                <select id="signHash">
+                  <option value="SHA-256">SHA-256</option>
+                  <option value="SHA-384">SHA-384</option>
+                  <option value="SHA-512">SHA-512</option>
+                </select>
+              </div>
+              <label class="check"><input type="checkbox" id="signCopySans" checked> Copy names from the CSR</label>
+            </div>
+            <div class="actions">
+              <button type="submit" class="btn primary">Sign CSR</button>
+            </div>
+          </form>
+        </div>
+        <div class="output" id="result-ca-sign" data-empty="The signed certificate will appear here."></div>
+      </section>
+
+      <section class="view" id="view-convert">
+        <div class="input card">
+          <h2>Convert a certificate or key</h2>
+          <form id="convertForm" class="form">
+            <label for="convertFiles">Input <span class="hint">PEM, DER, PKCS#7 (P7B), PFX/P12 or JKS &middot; add the key and chain to build a PFX or JKS</span></label>
+            <input type="file" id="convertFiles" accept=".pem,.crt,.cer,.der,.cert,.key,.csr,.crl,.p7b,.p7c,.pfx,.p12,.jks,.keystore" multiple>
+            <textarea id="convertText" rows="6" placeholder="Or paste PEM text: certificate, chain and private key can be pasted together"></textarea>
+            <input type="password" id="convertPassword" placeholder="Input password (encrypted key, PFX/P12 or JKS, optional)" autocomplete="off">
+
+            <label for="convertFormat">Convert to</label>
+            <select id="convertFormat">
+              <option value="pem">PEM (certificate, chain and key as separate files)</option>
+              <option value="der">DER (binary)</option>
+              <option value="p7b">PKCS#7 / P7B (certificates only)</option>
+              <option value="pfx">PFX / PKCS#12 (key + certificates)</option>
+              <option value="jks">JKS (Java keystore)</option>
+            </select>
+            <div id="convertOutOptions" class="form" hidden>
+              <input type="password" id="convertOutPassword" placeholder="Password for the output" autocomplete="new-password">
+              <input type="text" id="convertAlias" maxlength="64" placeholder="Alias / friendly name (optional)" autocomplete="off">
+              <label class="check" id="convertLegacyRow"><input type="checkbox" id="convertLegacy"> Legacy encryption (3DES) for old Windows and Java</label>
+            </div>
+            <p class="hint" id="convertHint"></p>
+            <div class="actions">
+              <button type="submit" class="btn primary">Convert</button>
+              <button type="button" class="btn" data-action="clear" data-ids="convertFiles,convertText,convertPassword,convertOutPassword,convertAlias" data-out="result-convert">Clear</button>
+            </div>
+          </form>
+        </div>
+        <div class="output" id="result-convert" data-empty="Converted files will appear here."></div>
       </section>
     </main>
   </div>
