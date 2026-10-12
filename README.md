@@ -1,4 +1,4 @@
-# Certificate Validator
+# Certificate Workbench
 
 A small web app for validating, decoding, converting and creating X.509 certificates, keys and CSRs.
 
@@ -95,7 +95,7 @@ $env:APP_VERSION = "1.1.1"; docker compose up -d
 Remove-Item Env:APP_VERSION   # clear it afterwards
 ```
 
-You can also keep the settings in a `.env` file next to `docker-compose.yml`: copy `sample.env` to `.env` and edit it (for example `APP_VERSION=1.1.1`). Then plain `docker compose up -d` is enough. The container is named `cert-validator`, so you can use `docker logs cert-validator` and `docker stop cert-validator`.
+You can also keep the settings in a `.env` file next to `docker-compose.yml`: copy `sample.env` to `.env` and edit it (for example `APP_VERSION=1.1.1`). Then plain `docker compose up -d` is enough. The container is named `cert-workbench`, so you can use `docker logs cert-workbench` and `docker stop cert-workbench`.
 
 The app is then at [http://localhost:33003](http://localhost:33003). Compose settings (all optional): `APP_VERSION`, `HOST_PORT` (default `33003`), `TRUST_PROXY`, `CORS_ORIGIN`. The container runs as a non-root user with a read-only filesystem and has a `/healthz` health check.
 
@@ -159,7 +159,7 @@ The GitHub Actions workflow (`.github/workflows/docker.yml`) runs the tests, the
 
 | Event | Result |
 | --- | --- |
-| Tag `vX.Y.Z` | Publishes `ghcr.io/<owner>/certificate-validator` as `X.Y.Z`, `X.Y` and `latest` (fails if the tag does not match `package.json`) |
+| Tag `vX.Y.Z` | Publishes `ghcr.io/<owner>/certificate-workbench` as `X.Y.Z`, `X.Y` and `latest` (fails if the tag does not match `package.json`) |
 | Push to `main` | Publishes `latest`, `edge` and `sha-<commit>` (no version tag) |
 | Pull request | Tests and builds only, nothing is published |
 
