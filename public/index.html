@@ -24,10 +24,13 @@
         <button type="button" class="nav-item" data-view="csr">CSR from Key</button>
         <button type="button" class="nav-item" data-view="history">History <span id="historyCount" class="count" hidden></span></button>
         <div class="nav-group">Local CA</div>
+        <button type="button" class="nav-item" data-view="dev-cert">Dev Certificate</button>
         <button type="button" class="nav-item" data-view="ca-create">Create CA</button>
         <button type="button" class="nav-item" data-view="ca-sign">Sign a CSR</button>
+        <button type="button" class="nav-item" data-view="crl">Revoke / CRL</button>
         <div class="nav-group">Convert</div>
         <button type="button" class="nav-item" data-view="convert">Convert Formats</button>
+        <button type="button" class="nav-item" data-view="key-tools">Key Tools</button>
       </nav>
       <div class="sidebar-foot">
         <div class="sidebar-user" id="userChip" hidden>
@@ -345,6 +348,9 @@
               </div>
             </div>
             <p class="hint">Path length limits how many CAs may sit below this one. 0 means it can only sign end-entity certificates.</p>
+            <label for="caConstraints">Limit what this CA can issue for <span class="hint">Optional</span></label>
+            <textarea id="caConstraints" rows="2" placeholder="localhost *.test 10.0.0.0/8"></textarea>
+            <p class="hint">Names and networks the CA is restricted to. Clients that trust it refuse certificates for anything else, so a leaked key cannot be used against real websites. <button type="button" class="btn small" id="caConstraintsLocal">Use local names</button></p>
             <details>
               <summary>More subject details</summary>
               <div class="form details-body">
@@ -397,6 +403,8 @@
             </div>
             <label for="signSans">Extra subject alternative names <span class="hint">Added to any names in the CSR</span></label>
             <textarea id="signSans" rows="2" placeholder="www.example.com, 10.0.0.5"></textarea>
+            <label for="signCrlUrl">CRL distribution point <span class="hint">Optional URL where you will serve the revocation list</span></label>
+            <input type="text" id="signCrlUrl" maxlength="200" placeholder="http://localhost:8080/ca.crl" autocomplete="off">
             <div class="two-col">
               <div>
                 <label for="signHash">Signature hash</label>
@@ -446,6 +454,158 @@
           </form>
         </div>
         <div class="output" id="result-convert" data-empty="Converted files will appear here."></div>
+      </section>
+
+      <section class="view" id="view-dev-cert">
+        <div class="input card">
+          <h2>Dev certificate</h2>
+          <p class="hint">A key, a certificate for localhost-style names and the CA that signed it, in every format you are likely to need. Made in memory; nothing is stored.</p>
+          <form id="devCertForm" class="form">
+            <label for="devNames">Names <span class="hint">Host names and IP addresses, separated by spaces or commas</span></label>
+            <textarea id="devNames" rows="2" placeholder="localhost 127.0.0.1 ::1">localhost 127.0.0.1 ::1</textarea>
+            <div class="two-col">
+              <div>
+                <label for="devAlgorithm">Key type</label>
+                <select id="devAlgorithm">
+                  <option value="ECDSA-P256">ECDSA P-256 (recommended)</option>
+                  <option value="ECDSA-P384">ECDSA P-384</option>
+                  <option value="RSA-2048">RSA 2048</option>
+                  <option value="RSA-3072">RSA 3072</option>
+                  <option value="RSA-4096">RSA 4096</option>
+                </select>
+              </div>
+              <div>
+                <label for="devValidity">Validity (days)</label>
+                <input type="number" id="devValidity" value="365" min="1" max="825">
+              </div>
+            </div>
+            <label class="check"><input type="checkbox" id="devClientAuth"> Also allow TLS client authentication (mutual TLS)</label>
+
+            <label for="devCaMode">Certificate authority</label>
+            <select id="devCaMode">
+              <option value="new">Create a new CA for me</option>
+              <option value="existing">Sign with my existing CA</option>
+            </select>
+            <div id="devCaNew" class="form">
+              <label for="devCaName">CA name <span class="hint">Optional</span></label>
+              <input type="text" id="devCaName" maxlength="64" placeholder="Workbench Dev CA" autocomplete="off">
+              <label for="devScope">What the CA may issue certificates for</label>
+              <select id="devScope">
+                <option value="local">Local names only (recommended)</option>
+                <option value="names">Only the names above</option>
+                <option value="none">Any name (not recommended)</option>
+              </select>
+              <p class="hint" id="devScopeHint"></p>
+            </div>
+            <div id="devCaExisting" class="form" hidden>
+              <label for="devCaFiles">CA certificate and private key <span class="hint">PEM files, PFX/P12 or JKS</span></label>
+              <input type="file" id="devCaFiles" accept=".pem,.crt,.cer,.key,.pfx,.p12,.jks,.keystore" multiple>
+              <textarea id="devCaText" rows="4" placeholder="Or paste the CA certificate and its private key (PEM)"></textarea>
+              <input type="password" id="devCaPassword" placeholder="Password (encrypted key, PFX/P12 or JKS, optional)" autocomplete="off">
+              <p class="hint warn-text">The CA private key is sent to this server to sign, held in memory only and never stored. It is not included in the downloads.</p>
+            </div>
+
+            <details>
+              <summary>More options</summary>
+              <div class="form details-body">
+                <label for="devBundlePassword">Password for the PFX and Java keystores</label>
+                <input type="text" id="devBundlePassword" value="changeit" maxlength="64" autocomplete="off">
+                <label for="devCrlUrl">CRL distribution point <span class="hint">Optional URL where you will serve the revocation list</span></label>
+                <input type="text" id="devCrlUrl" maxlength="200" placeholder="http://localhost:8080/ca.crl" autocomplete="off">
+              </div>
+            </details>
+            <div class="actions">
+              <button type="submit" class="btn primary">Create dev certificate</button>
+            </div>
+          </form>
+        </div>
+        <div class="output" id="result-dev-cert" data-empty="Your certificate bundle will appear here."></div>
+      </section>
+
+      <section class="view" id="view-crl">
+        <div class="input card">
+          <h2>Revoke certificates (CRL)</h2>
+          <p class="hint">Make a revocation list from your CA to test how clients treat revoked certificates. To add to a list later, supply the previous one.</p>
+          <form id="crlForm" class="form">
+            <label for="crlCaFiles">CA certificate and private key <span class="hint">PEM files, PFX/P12 or JKS</span></label>
+            <input type="file" id="crlCaFiles" accept=".pem,.crt,.cer,.key,.pfx,.p12,.jks,.keystore" multiple>
+            <textarea id="crlCaText" rows="4" placeholder="Or paste the CA certificate and its private key (PEM)"></textarea>
+            <input type="password" id="crlCaPassword" placeholder="Password (encrypted key, PFX/P12 or JKS, optional)" autocomplete="off">
+            <p class="hint warn-text">The CA private key is sent to this server to sign, held in memory only and never stored.</p>
+
+            <label for="crlCertFiles">Certificates to revoke <span class="hint">Must have been issued by this CA</span></label>
+            <input type="file" id="crlCertFiles" accept=".pem,.crt,.cer,.der" multiple>
+            <textarea id="crlCertText" rows="3" placeholder="Paste one or more certificates (PEM)"></textarea>
+
+            <label for="crlSerials">Or serial numbers <span class="hint">One per line: serial [reason] [date]</span></label>
+            <textarea id="crlSerials" rows="3" placeholder="0A1B2C3D&#10;7F9E keyCompromise&#10;00FF superseded 2026-03-01"></textarea>
+
+            <div class="two-col">
+              <div>
+                <label for="crlReason">Reason <span class="hint">When none is given</span></label>
+                <select id="crlReason">
+                  <option value="unspecified">Unspecified</option>
+                  <option value="keyCompromise">Key compromise</option>
+                  <option value="superseded">Superseded</option>
+                  <option value="cessationOfOperation">Cessation of operation</option>
+                  <option value="affiliationChanged">Affiliation changed</option>
+                  <option value="cACompromise">CA compromise</option>
+                  <option value="certificateHold">Certificate hold</option>
+                  <option value="privilegeWithdrawn">Privilege withdrawn</option>
+                </select>
+              </div>
+              <div>
+                <label for="crlNextDays">Next update (days)</label>
+                <input type="number" id="crlNextDays" value="30" min="1" max="365">
+              </div>
+            </div>
+            <details>
+              <summary>Add to an existing CRL</summary>
+              <div class="form details-body">
+                <label for="crlPrevFiles">Previous CRL <span class="hint">Its entries are kept and the CRL number goes up by one</span></label>
+                <input type="file" id="crlPrevFiles" accept=".crl,.pem,.der">
+                <textarea id="crlPrevText" rows="3" placeholder="Or paste the previous CRL (PEM)"></textarea>
+              </div>
+            </details>
+            <div class="actions">
+              <button type="submit" class="btn primary">Create CRL</button>
+              <button type="button" class="btn" data-action="clear" data-ids="crlCaFiles,crlCaText,crlCaPassword,crlCertFiles,crlCertText,crlSerials,crlPrevFiles,crlPrevText" data-out="result-crl">Clear</button>
+            </div>
+          </form>
+        </div>
+        <div class="output" id="result-crl" data-empty="Your revocation list will appear here."></div>
+      </section>
+
+      <section class="view" id="view-key-tools">
+        <div class="input card">
+          <h2>Key tools</h2>
+          <p class="hint">See what a private key is, change its format, or add, remove or change its password.</p>
+          <form id="keyToolsForm" class="form">
+            <label for="keyFiles">Private key <span class="hint">PEM, DER, PFX/P12 or JKS</span></label>
+            <input type="file" id="keyFiles" accept=".pem,.key,.der,.pfx,.p12,.jks,.keystore">
+            <textarea id="keyText" rows="5" placeholder="Or paste the private key (PEM)"></textarea>
+            <input type="password" id="keyPassword" placeholder="Current password (if the key is encrypted)" autocomplete="off">
+
+            <label for="keyAction">What to do</label>
+            <select id="keyAction">
+              <option value="inspect">Show details and fingerprints</option>
+              <option value="pkcs8">Save as PKCS#8 (modern, recommended)</option>
+              <option value="pkcs1">Save as PKCS#1 (RSA keys only)</option>
+              <option value="sec1">Save as SEC1 (EC keys only)</option>
+              <option value="public">Extract the public key</option>
+            </select>
+            <div id="keyNewPasswordRow" class="form" hidden>
+              <input type="password" id="keyNewPassword" placeholder="New password (leave empty for none)" autocomplete="new-password">
+              <p class="hint">A password encrypts the saved key. Leave it empty to save an unprotected key, which also removes an existing password.</p>
+            </div>
+            <p class="hint warn-text">The key is sent to this server, handled in memory only and never stored.</p>
+            <div class="actions">
+              <button type="submit" class="btn primary">Run</button>
+              <button type="button" class="btn" data-action="clear" data-ids="keyFiles,keyText,keyPassword,keyNewPassword" data-out="result-key-tools">Clear</button>
+            </div>
+          </form>
+        </div>
+        <div class="output" id="result-key-tools" data-empty="The result will appear here."></div>
       </section>
     </main>
   </div>

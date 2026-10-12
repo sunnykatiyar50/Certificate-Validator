@@ -176,3 +176,56 @@ test('every tool result renders from real server output', async () => {
   assert.ok(out.innerHTML.length > 200, 'certificate report rendered into the page');
   assert.ok(!out.innerHTML.includes('undefined'));
 });
+
+test('the local development tools render from real server output', async () => {
+  const { issueDevCertificate } = require('../lib/devcert');
+  const { createCrl } = require('../lib/crl');
+  const { keyTools } = require('../lib/keytools');
+  const { render } = loadBrowserScript();
+
+  // Dev certificate: one prominent ZIP button, the files without the ZIP repeated, and the how-to guides.
+  const dev = await issueDevCertificate({ names: 'app.test 10.0.0.5', bundlePassword: 'my-pass-1' });
+  const devHtml = render('renderDevCert(__data)', dev);
+  assert.match(devHtml, /Download everything \(\.zip\)/);
+  assert.equal((devHtml.match(/app\.test-dev-cert\.zip/g) || []).length, 0, 'the ZIP is a button, not a second file card');
+  assert.match(devHtml, /data-action="download-b64" data-id="[\w-]+"/);
+  for (const name of ['app.test.pem', 'app.test-key.pem', 'app.test.pfx', 'app.test.jks', 'truststore.jks', 'ca.crt', 'ca-key.pem']) assert.ok(devHtml.includes(name), name);
+  assert.match(devHtml, /Trust the CA/);
+  assert.match(devHtml, /update-ca-certificates/);
+  assert.match(devHtml, /server\.ssl\.key-store=app\.test\.pfx/);
+  assert.match(devHtml, /server\.ssl\.key-store-password=my-pass-1/);
+  assert.match(devHtml, /ssl_certificate\s+app\.test-fullchain\.pem/);
+  assert.match(devHtml, /A new CA was created/);
+  assert.ok(!devHtml.includes('undefined'));
+  assert.ok((devHtml.match(/class="pem-block secret"/g) || []).length >= 4, 'keys, PFX, JKS and the CA key are marked secret');
+
+  // Using an existing CA: no "new CA" notice, no CA key file.
+  const mine = await createCa({ commonName: 'Mine' });
+  const existing = await issueDevCertificate({ names: 'mine.test' }, { caInputs: [{ name: 'ca.pem', buffer: bytes(mine.certificatePem + mine.privateKeyPem) }] });
+  const existingHtml = render('renderDevCert(__data)', existing);
+  assert.ok(!existingHtml.includes('A new CA was created'));
+  assert.ok(!existingHtml.includes('ca-key.pem'));
+
+  // CRL: summary, the table of serials and the "try it" commands.
+  const crl = await createCrl([{ name: 'ca.pem', buffer: bytes(mine.certificatePem + mine.privateKeyPem) }], { serials: '0A1B2C keyCompromise\n7f' });
+  const crlHtml = render('renderCrl(__data)', crl);
+  assert.match(crlHtml, /CRL #1/);
+  assert.match(crlHtml, /A1B2C/);
+  assert.match(crlHtml, /Key compromise/);
+  assert.match(crlHtml, /ca\.crl\.der/);
+  assert.match(crlHtml, /openssl verify -crl_check/);
+  assert.ok(!crlHtml.includes('undefined'));
+
+  // Key tools: details and the converted file.
+  const rsa = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey;
+  const tools = keyTools([{ name: 'k.pem', buffer: bytes(rsa.export({ type: 'pkcs1', format: 'pem' })) }], { action: 'pkcs8', newPassword: 'new-pass-1' });
+  const toolsHtml = render('renderKeyTools(__data)', tools);
+  assert.match(toolsHtml, /RSA 2048/);
+  assert.match(toolsHtml, /PKCS#1 \(RSA\)/);
+  assert.match(toolsHtml, /Encrypted PKCS#8/);
+  assert.match(toolsHtml, /private-key-pkcs8\.pem/);
+  assert.ok(!toolsHtml.includes('new-pass-1'), 'the password is never shown');
+  assert.ok(!toolsHtml.includes('undefined'));
+  const inspect = render('renderKeyTools(__data)', keyTools([{ name: 'k.pem', buffer: bytes(rsa.export({ type: 'pkcs8', format: 'pem' })) }], {}));
+  assert.match(inspect, /SPKI pin/);
+});

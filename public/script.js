@@ -795,13 +795,13 @@ function renderFiles(files) {
   return `<div class="pem-list">${files.map(f => {
     const note = f.note ? `<div class="muted file-note">${escapeHtml(f.note)}</div>` : '';
     if (f.encoding === 'text') {
-      const secret = /private-key/.test(f.name);
+      const secret = f.secret || /private-key/.test(f.name);
       return note + pemBlock(f.name, f.content, f.name, { secret, kind: f.name.replace(/\.[^.]+$/, '') });
     }
     const id = newId();
     binaryDownloads.set(id, f);
     const size = humanSize(Math.floor(f.content.length * 3 / 4));
-    return `<div class="pem-block${/keystore|\.pfx|private-key/.test(f.name) ? ' secret' : ''}">
+    return `<div class="pem-block${f.secret || /keystore|\.pfx|private-key/.test(f.name) ? ' secret' : ''}">
       <div class="pem-head">
         <span><b>${escapeHtml(f.name)}</b> ${badge('info', size)}</span>
         <span class="pem-actions">
@@ -997,6 +997,7 @@ function renderIssued(data, { title, usage }) {
       row('Valid from', escapeHtml(formatDate(data.notBefore))),
       row('Valid to', escapeHtml(formatDate(data.notAfter))),
       row('Path length', data.pathLength === null || data.pathLength === undefined ? '' : escapeHtml(String(data.pathLength))),
+      row('Limited to', data.nameConstraints && data.nameConstraints.length ? chips(data.nameConstraints) : ''),
       row('SHA-256', escapeHtml(data.fingerprintSha256), { mono: true })
     ])}
     <div class="pem-list">
@@ -1030,6 +1031,7 @@ $('caCreateForm').addEventListener('submit', e => {
   appendIf(fd, 'hash', $('caHash').value);
   appendIf(fd, 'validityDays', $('caValidity').value);
   appendIf(fd, 'pathLength', $('caPathLength').value);
+  appendIf(fd, 'nameConstraints', $('caConstraints').value);
   appendIf(fd, 'organization', $('caOrg').value);
   appendIf(fd, 'organizationalUnit', $('caOu').value);
   appendIf(fd, 'country', $('caCountry').value);
@@ -1051,6 +1053,7 @@ $('caSignForm').addEventListener('submit', e => {
   appendIf(fd, 'validityDays', $('signValidity').value);
   appendIf(fd, 'sans', $('signSans').value);
   appendIf(fd, 'hash', $('signHash').value);
+  appendIf(fd, 'crlUrl', $('signCrlUrl').value);
   fd.append('copySans', $('signCopySans').checked ? 'true' : 'false');
   postTool('/api/ca/sign', fd, out, d => renderIssued(d, { title: d.kind === 'intermediate' ? 'Signed intermediate CA' : 'Signed certificate', usage: d.kind === 'intermediate' ? 'ca' : 'leaf' }), e.submitter);
 });
@@ -1108,6 +1111,251 @@ $('convertForm').addEventListener('submit', e => {
 });
 syncConvertForm();
 
+
+// ---------- local development tools ----------
+
+// A copyable block of text (commands or config). Reuses the key block look and its Copy button.
+function codeBlock(title, code) {
+  return `<div class="pem-block" data-kind="snippet">
+    <div class="pem-head">
+      <span><b>${escapeHtml(title)}</b></span>
+      <span class="pem-actions"><button type="button" class="btn small" data-action="copy">Copy</button></span>
+    </div>
+    <pre>${escapeHtml(code)}</pre>
+  </div>`;
+}
+
+// Names and networks a development CA is limited to when "Use local names" is pressed.
+// Keep in sync with LOCAL_DNS and LOCAL_NETWORKS in lib/nameConstraints.js.
+const LOCAL_CONSTRAINTS = 'localhost test example invalid local localdomain internal home.arpa lan 127.0.0.0/8 ::1/128 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 169.254.0.0/16 fc00::/7 fe80::/10';
+$('caConstraintsLocal').addEventListener('click', () => { $('caConstraints').value = LOCAL_CONSTRAINTS; });
+
+// ----- dev certificate -----
+
+const DEV_SCOPE_HINTS = {
+  local: 'The CA can only issue for reserved and private names (localhost, *.test, *.local, private IP ranges) plus the names above. If its key ever leaks, it cannot be used to impersonate real websites.',
+  names: 'The CA can only issue for exactly the names above. The safest choice, but you cannot reuse the CA for other projects.',
+  none: 'The CA has no restrictions. Anyone who gets its key could issue a certificate for any website that your devices would trust. Only use this if you will delete the CA afterwards.'
+};
+
+function syncDevCertForm() {
+  const existing = $('devCaMode').value === 'existing';
+  $('devCaNew').hidden = existing;
+  $('devCaExisting').hidden = !existing;
+  $('devScopeHint').textContent = DEV_SCOPE_HINTS[$('devScope').value] || '';
+}
+$('devCaMode').addEventListener('change', syncDevCertForm);
+$('devScope').addEventListener('change', syncDevCertForm);
+syncDevCertForm();
+
+function trustGuide(password) {
+  const steps = [
+    ['macOS', 'sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ca.crt'],
+    ['Windows (run as administrator)', 'certutil -addstore -f Root ca.cer'],
+    ['Debian and Ubuntu', 'sudo cp ca.crt /usr/local/share/ca-certificates/dev-ca.crt\nsudo update-ca-certificates'],
+    ['Fedora and RHEL', 'sudo cp ca.crt /etc/pki/ca-trust/source/anchors/\nsudo update-ca-trust'],
+    ['Node.js', 'NODE_EXTRA_CA_CERTS=/path/to/ca.crt node app.js'],
+    ['curl, git and Python', 'curl --cacert ca.crt https://localhost:8443/\ngit config --global http.sslCAInfo /path/to/ca.crt\nexport REQUESTS_CA_BUNDLE=/path/to/ca.crt'],
+    ['Java', `java -Djavax.net.ssl.trustStore=truststore.jks -Djavax.net.ssl.trustStorePassword=${password} -jar app.jar`]
+  ];
+  return `<details class="guide" open>
+    <summary>Trust the CA (once per machine)</summary>
+    <p class="muted">Browsers and tools only accept the certificate once they trust the CA that signed it. Install <b>ca.crt</b> (or <b>ca.cer</b> on Windows).</p>
+    ${steps.map(([title, code]) => codeBlock(title, code)).join('')}
+    <p class="muted">Firefox keeps its own list: Settings, Privacy and Security, Certificates, View Certificates, Authorities, Import.</p>
+  </details>`;
+}
+
+function serverGuide(base, password) {
+  const key = `${base}-key.pem`;
+  const chain = `${base}-fullchain.pem`;
+  const snippets = [
+    ['Node.js', ["const https = require('https');", "const fs = require('fs');", '', 'https.createServer({', `  key: fs.readFileSync('${key}'),`, `  cert: fs.readFileSync('${chain}')`, "}, (req, res) => res.end('ok')).listen(8443);"].join('\n')],
+    ['Vite (vite.config.js)', ["import fs from 'fs';", '', 'export default {', '  server: {', '    https: {', `      key: fs.readFileSync('${key}'),`, `      cert: fs.readFileSync('${chain}')`, '    }', '  }', '};'].join('\n')],
+    ['nginx', ['server {', '  listen 443 ssl;', `  ssl_certificate     ${chain};`, `  ssl_certificate_key ${key};`, '}'].join('\n')],
+    ['Caddy', [`localhost:8443 {`, `  tls ${chain} ${key}`, '}'].join('\n')],
+    ['Spring Boot (application.properties)', ['server.port=8443', `server.ssl.key-store=${base}.pfx`, 'server.ssl.key-store-type=PKCS12', `server.ssl.key-store-password=${password}`].join('\n')],
+    ['Python (uvicorn)', `uvicorn app:app --port 8443 --ssl-keyfile ${key} --ssl-certfile ${chain}`],
+    ['Go', `http.ListenAndServeTLS(":8443", "${chain}", "${key}", handler)`]
+  ];
+  return `<details class="guide">
+    <summary>Use it in your server</summary>
+    ${snippets.map(([title, code]) => codeBlock(title, code)).join('')}
+  </details>`;
+}
+
+function renderDevCert(data) {
+  const s = data.summary;
+  const zip = data.files.find(f => f.name.endsWith('.zip'));
+  const zipId = newId();
+  binaryDownloads.set(zipId, zip);
+  const ca = s.ca;
+  const scopeText = ca.created
+    ? (ca.nameConstraints ? '' : badge('warn', 'No name restrictions'))
+    : '';
+  return `<div class="cert">
+    <div class="cert-header">
+      <div class="cert-title">Dev certificate ${badge('info', s.algorithmLabel)}</div>
+      <div class="pem-actions"><button type="button" class="btn primary" data-action="download-b64" data-id="${zipId}">Download everything (.zip)</button></div>
+    </div>
+    ${toolWarnings(data.warnings)}
+    ${ca.created ? `<div class="notice">A new CA was created for this certificate. Its private key is in <b>ca-key.pem</b> and in the ZIP, and it is not kept anywhere else. Keep it if you want to issue more certificates from this CA.</div>` : ''}
+    <div class="sections">
+    ${section('Certificate', [
+      row('Names', chips(s.names)),
+      row('Valid from', escapeHtml(formatDate(s.notBefore))),
+      row('Valid to', escapeHtml(formatDate(s.notAfter))),
+      row('Used for', escapeHtml(s.clientAuth ? 'TLS server and TLS client' : 'TLS server')),
+      row('Serial number', escapeHtml(s.serialNumber), { mono: true }),
+      row('SHA-256', escapeHtml(s.fingerprintSha256), { mono: true }),
+      row('CRL URL', s.crlUrl ? escapeHtml(s.crlUrl) : '')
+    ])}
+    ${section('Certificate authority', [
+      row('CA', `${escapeHtml(ca.subject)} ${ca.created ? badge('good', 'New') : badge('info', 'Yours')} ${scopeText}`),
+      row('Valid to', escapeHtml(formatDate(ca.notAfter))),
+      row('Limited to', ca.nameConstraints ? chips(ca.nameConstraints) : ''),
+      row('SHA-256', escapeHtml(ca.fingerprintSha256), { mono: true }),
+      row('PFX / JKS password', `<span class="mono">${escapeHtml(s.bundlePassword)}</span>`)
+    ])}
+    </div>
+  </div>
+  <div class="cert">
+    <div class="cert-title">How to use it</div>
+    ${trustGuide(s.bundlePassword)}
+    ${serverGuide(data.base, s.bundlePassword)}
+  </div>
+  <div class="section-title">Files</div>
+  ${renderFiles(data.files.filter(f => f !== zip))}`;
+}
+
+$('devCertForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const out = $('result-dev-cert');
+  const existing = $('devCaMode').value === 'existing';
+  if (existing && !hasInput('devCaFiles', 'devCaText')) return showError(out, 'Provide the CA certificate and private key.');
+  const fd = new FormData();
+  appendIf(fd, 'names', $('devNames').value);
+  appendIf(fd, 'algorithm', $('devAlgorithm').value);
+  appendIf(fd, 'validityDays', $('devValidity').value);
+  appendIf(fd, 'bundlePassword', $('devBundlePassword').value);
+  appendIf(fd, 'crlUrl', $('devCrlUrl').value);
+  fd.append('clientAuth', $('devClientAuth').checked ? 'true' : 'false');
+  if (existing) {
+    appendInputs(fd, 'devCaFiles', 'ca', 'devCaText', 'caText');
+    appendIf(fd, 'caPassword', $('devCaPassword').value);
+  } else {
+    appendIf(fd, 'caName', $('devCaName').value);
+    appendIf(fd, 'scope', $('devScope').value);
+  }
+  postTool('/api/dev-cert', fd, out, renderDevCert, e.submitter);
+});
+
+// ----- revocation list -----
+
+function crlGuide() {
+  const blocks = [
+    ['Look inside the list', 'openssl crl -in ca.crl -noout -text'],
+    ['Check a certificate against it (OpenSSL)', 'cat ca.crt ca.crl > check.pem\nopenssl verify -crl_check -CAfile check.pem your-certificate.pem'],
+    ['curl', 'curl --cacert ca.crt --crlfile ca.crl https://localhost:8443/'],
+    ['Java', 'java -Dcom.sun.net.ssl.checkRevocation=true -Dcom.sun.security.enableCRLDP=true -jar app.jar']
+  ];
+  return `<div class="cert">
+    <div class="cert-title">Try it</div>
+    <p class="muted">Publish <b>ca.crl.der</b> at the CRL URL named in your certificates (see Dev Certificate, More options). Clients re-fetch it after the next update time, so make a new list before then.</p>
+    ${blocks.map(([title, code]) => codeBlock(title, code)).join('')}
+  </div>`;
+}
+
+function renderCrl(data) {
+  const s = data.summary;
+  const rows = s.entries.map(e => `<tr><td class="mono">${escapeHtml(e.serialNumber)}</td><td>${escapeHtml(formatDate(e.revocationDate))}</td><td>${escapeHtml(e.reason)}</td><td>${e.carried ? '<span class="muted">Kept</span>' : badge('good', 'Added')}</td></tr>`).join('');
+  return `<div class="cert">
+    <div class="cert-header">
+      <div class="cert-title">Certificate revocation list ${badge('info', `CRL #${s.crlNumber}`)}</div>
+      <div class="cert-status ok">&#10003; Signed</div>
+    </div>
+    ${toolWarnings(data.warnings)}
+    <div class="sections">
+    ${section('List', [
+      row('Issuer', escapeHtml(s.issuer)),
+      row('This update', escapeHtml(formatDate(s.thisUpdate))),
+      row('Next update', `${escapeHtml(formatDate(s.nextUpdate))} <span class="muted">(in ${escapeHtml(String(s.nextUpdateDays))} days)</span>`)
+    ])}
+    ${section('Contents', [
+      row('Revoked certificates', escapeHtml(String(s.entries.length))),
+      row('Added now', escapeHtml(String(s.added))),
+      row('Kept from the previous CRL', s.carriedOver ? escapeHtml(String(s.carriedOver)) : ''),
+      row('Certificates revoked by file', s.revokedCertificates.length ? chips(s.revokedCertificates) : '')
+    ])}
+    </div>
+    ${rows ? `<div class="section"><div class="section-title">Revoked serial numbers</div>
+      <div class="table-wrap"><table class="grid"><thead><tr><th>Serial</th><th>Revoked</th><th>Reason</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>` : ''}
+  </div>
+  ${renderFiles(data.files)}
+  ${crlGuide()}`;
+}
+
+$('crlForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const out = $('result-crl');
+  if (!hasInput('crlCaFiles', 'crlCaText')) return showError(out, 'Provide the CA certificate and private key.');
+  if (!hasInput('crlCertFiles', 'crlCertText') && !$('crlSerials').value.trim() && !hasInput('crlPrevFiles', 'crlPrevText')) {
+    if (!window.confirm('Nothing is selected for revocation, so the list will be empty. Create it anyway?')) return;
+  }
+  const fd = new FormData();
+  appendInputs(fd, 'crlCaFiles', 'ca', 'crlCaText', 'caText');
+  appendIf(fd, 'caPassword', $('crlCaPassword').value);
+  appendInputs(fd, 'crlCertFiles', 'cert', 'crlCertText', 'certText');
+  appendIf(fd, 'serials', $('crlSerials').value);
+  appendIf(fd, 'reason', $('crlReason').value);
+  appendIf(fd, 'nextUpdateDays', $('crlNextDays').value);
+  appendInputs(fd, 'crlPrevFiles', 'previous', 'crlPrevText', 'previousText');
+  postTool('/api/crl/create', fd, out, renderCrl, e.submitter);
+});
+
+// ----- key tools -----
+
+const KEY_ACTIONS_WITH_PASSWORD = ['pkcs8', 'pkcs1', 'sec1'];
+
+function syncKeyTools() {
+  $('keyNewPasswordRow').hidden = !KEY_ACTIONS_WITH_PASSWORD.includes($('keyAction').value);
+}
+$('keyAction').addEventListener('change', syncKeyTools);
+syncKeyTools();
+
+function renderKeyTools(data) {
+  const s = data.summary;
+  const protection = s.result && s.result !== 'Public key'
+    ? `${s.wasEncrypted ? 'Was protected' : 'Was not protected'}, result: ${s.resultEncrypted ? 'protected' : 'not protected'}`
+    : (s.wasEncrypted ? 'Protected with a password' : 'Not protected');
+  return `<div class="cert">
+    <div class="cert-header">
+      <div class="cert-title">Private key ${badge('info', s.keyDescription)} ${s.result ? badge('good', s.result) : ''}</div>
+    </div>
+    ${toolWarnings(data.warnings)}
+    ${section('Key', [
+      row('Type', escapeHtml(s.keyDescription)),
+      row('Stored as', escapeHtml(s.sourceFormat)),
+      row('Password', escapeHtml(protection)),
+      row('Public key SHA-256', escapeHtml(s.fingerprintSha256), { mono: true }),
+      row('SPKI pin (base64 SHA-256)', escapeHtml(s.spkiPinSha256), { mono: true })
+    ])}
+    <p class="muted">The fingerprint is of the public key, so it is the same whichever format or password the key is stored with, and it matches the certificate made for this key.</p>
+  </div>
+  ${renderFiles(data.files)}`;
+}
+
+$('keyToolsForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const out = $('result-key-tools');
+  if (!hasInput('keyFiles', 'keyText')) return showError(out, 'Provide a private key: choose a file or paste it.');
+  const fd = new FormData();
+  appendInputs(fd, 'keyFiles', 'files', 'keyText', 'text');
+  appendIf(fd, 'password', $('keyPassword').value);
+  appendIf(fd, 'action', $('keyAction').value);
+  if (KEY_ACTIONS_WITH_PASSWORD.includes($('keyAction').value)) appendIf(fd, 'newPassword', $('keyNewPassword').value);
+  postTool('/api/key-tools', fd, out, renderKeyTools, e.submitter);
+});
 
 // ---------- session ----------
 
