@@ -6,6 +6,8 @@ Add your notes under **Unreleased** as you work. `node scripts/release.js` moves
 
 ## Unreleased
 
+## 2.3.0 - 2026-10-12
+
 ### Added
 - **Dev Certificate:** one click creates a local CA and a certificate for `localhost`, `127.0.0.1`, `::1` and your own names, with PEM, PFX, JKS, a trust store, a ZIP of everything and setup snippets for common servers.
 - **Name restrictions** when creating a CA, so it can only issue for local names or the ones you choose.
