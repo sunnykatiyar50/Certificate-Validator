@@ -61,6 +61,7 @@ function showView(name) {
   navItems.forEach(b => b.classList.toggle('active', b.dataset.view === name));
   views.forEach(v => v.classList.toggle('active', v.id === `view-${name}`));
   if (name === 'history') refreshHistory();
+  if (name === 'cas') refreshCas();
   try { history.replaceState(null, '', `#${name}`); } catch (e) { /* hash is a convenience only */ }
 }
 navItems.forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
@@ -123,7 +124,7 @@ $('liveForm').addEventListener('submit', e => {
 
 function clearForm(ids, outId) {
   ids.forEach(id => { $(id).value = ''; });
-  $(outId).innerHTML = '';
+  if (outId) $(outId).innerHTML = '';
 }
 $('clearFileBtn').addEventListener('click', () => clearForm(['certificate', 'filePassword', 'fileHostname'], 'result-file'));
 $('clearTextBtn').addEventListener('click', () => clearForm(['certText', 'textPassword', 'textHostname'], 'result-text'));
@@ -399,6 +400,31 @@ function historyPayload(entry) {
   };
 }
 
+// Save a generated key pair to history, and keep its private key where the user chose: 'with' = this browser,
+// 'server' = encrypted on the server, 'without' = nowhere, 'none' = nothing is saved. Returns the notice to show.
+async function saveToHistory(entry, privateKeyPem, mode) {
+  if (mode === 'none') return 'Not saved. Copy or download the private key now, it cannot be recovered later.';
+  const saved = await api('/api/history', jsonRequest('POST', historyPayload(entry)));
+  const result = await saved.json();
+  if (!saved.ok) return `Could not save to history: ${escapeHtml(result.error || 'unknown error')}. Copy or download the private key now.`;
+  let notice = `Saved to history as <b>${escapeHtml(entry.name)}</b>. `;
+  if (mode === 'with') {
+    notice += saveLocalKey(result.entry.id, privateKeyPem)
+      ? 'The private key is kept in this browser only, never on the server.'
+      : 'The private key could not be kept (browser storage is unavailable), so copy or download it now.';
+  } else if (mode === 'server') {
+    const put = await api(`/api/history/${encodeURIComponent(result.entry.id)}/key`, jsonRequest('PUT', { privateKeyPem }));
+    const body = await put.json().catch(() => ({}));
+    notice += put.ok
+      ? 'The private key is kept on the server, encrypted, and only you can read it.'
+      : `The private key could not be kept on the server (${escapeHtml(body.error || 'unknown error')}), so copy or download it now.`;
+  } else {
+    notice += 'The private key was not kept, so copy or download it now.';
+  }
+  updateHistoryCount();
+  return notice;
+}
+
 $('generateForm').addEventListener('submit', async e => {
   e.preventDefault();
   const out = $('result-generate');
@@ -434,27 +460,7 @@ $('generateForm').addEventListener('submit', async e => {
       name: $('genName').value.trim() || `${commonName || 'keypair'} (${data.algorithmLabel})`,
       createdAt: new Date().toISOString()
     };
-    let notice;
-    const saveMode = $('genHistory').value;
-    if (saveMode === 'none') {
-      notice = 'Not saved. Copy or download the private key now, it cannot be recovered later.';
-    } else {
-      const saved = await api('/api/history', jsonRequest('POST', historyPayload(entry)));
-      const result = await saved.json();
-      if (!saved.ok) {
-        notice = `Could not save to history: ${escapeHtml(result.error || 'unknown error')}. Copy or download the private key now.`;
-      } else {
-        notice = `Saved to history as <b>${escapeHtml(entry.name)}</b>. `;
-        if (saveMode === 'with') {
-          notice += saveLocalKey(result.entry.id, data.privateKeyPem)
-            ? 'The private key is kept in this browser only, never on the server.'
-            : 'The private key could not be kept (browser storage is unavailable), so copy or download it now.';
-        } else {
-          notice += 'The private key was not kept, so copy or download it now.';
-        }
-        updateHistoryCount();
-      }
-    }
+    const notice = await saveToHistory(entry, data.privateKeyPem, $('genHistory').value);
     out.innerHTML = renderKeyPair(entry, { notice });
   } catch (err) {
     showError(out, err.message === 'Failed to fetch' ? 'Request failed. Is the server running?' : err.message);
@@ -572,7 +578,7 @@ function drawHistory() {
     ? list.map(e => `<button type="button" class="history-item${e.id === selectedHistoryId ? ' selected' : ''}" data-action="select" data-id="${escapeHtml(e.id)}">
         <span class="history-name">${escapeHtml(e.name)}</span>
         <span class="history-meta">${escapeHtml(e.algorithmLabel)} &middot; ${escapeHtml(formatDate(e.createdAt))}${isAdmin() ? ` &middot; ${escapeHtml(e.owner)}` : ''}</span>
-        <span class="history-tags">${e.certificatePem ? badge('info', 'cert') : ''}${e.csrPem ? badge('info', 'csr') : ''}${e.owner === me && loadLocalKeys()[e.id] ? badge('warn', 'private key here') : ''}</span>
+        <span class="history-tags">${e.certificatePem ? badge('info', 'cert') : ''}${e.csrPem ? badge('info', 'csr') : ''}${e.owner === me && loadLocalKeys()[e.id] ? badge('warn', 'private key here') : ''}${e.keyOnServer ? badge('warn', 'key on server') : ''}</span>
       </button>`).join('')
     : `<p class="muted">${historyEntries.length ? 'No items for this user.' : 'Nothing here yet. Generated key pairs you choose to save will be listed here.'}</p>`;
 
@@ -583,12 +589,17 @@ function drawHistory() {
   }
   const mine = selected.owner === me;
   const privateKeyPem = mine ? loadLocalKeys()[selected.id] : undefined;
-  $('result-history').innerHTML = renderKeyPair({ ...selected, privateKeyPem }, {
-    historyId: selected.id,
-    missingKeyMessage: mine
-      ? 'The private key is not stored on the server, and it was not kept in this browser.'
-      : 'Private keys are never stored on the server, so only the person who generated this can have it.'
-  });
+  const card = (pem, message) => renderKeyPair({ ...selected, privateKeyPem: pem }, { historyId: selected.id, missingKeyMessage: message });
+  if (!privateKeyPem && mine && selected.keyOnServer) {
+    $('result-history').innerHTML = card(undefined, 'Loading the private key from the server...');
+    api(`/api/history/${encodeURIComponent(selected.id)}/key`).then(r => r.json()).then(d => {
+      if (selectedHistoryId === selected.id) $('result-history').innerHTML = card(d.privateKeyPem, d.error || 'The private key could not be loaded.');
+    }).catch(() => {});
+    return;
+  }
+  $('result-history').innerHTML = card(privateKeyPem, mine
+    ? 'The private key was not kept: it is not on the server and not in this browser.'
+    : 'Private keys are only ever visible to the person who generated them.');
 }
 
 $('historyOwner').addEventListener('change', e => {
@@ -730,6 +741,17 @@ document.addEventListener('click', async e => {
     }
   } else if (action === 'import-legacy') {
     importLegacyHistory(btn);
+  } else if (action === 'ca-issue' || action === 'ca-sign-with' || action === 'ca-crl-with') {
+    useSavedCa(btn.dataset.pick, action === 'ca-issue' ? 'issue' : action === 'ca-sign-with' ? 'sign' : 'crl');
+  } else if (action === 'ca-download-cert') {
+    const ca = findSavedCa(btn.dataset.pick);
+    if (ca) saveBlob(new Blob([ca.certificatePem + (ca.chainPem || '')], { type: 'application/x-pem-file' }), `${slug(ca.name)}-ca.pem`);
+  } else if (action === 'ca-download-key') {
+    downloadCaKey(btn.dataset.pick);
+  } else if (action === 'ca-rename') {
+    renameSavedCa(btn.dataset.pick);
+  } else if (action === 'ca-delete') {
+    deleteSavedCa(btn.dataset.pick);
   }
 });
 
@@ -974,7 +996,7 @@ $('csrForm').addEventListener('submit', e => {
 
 // ---------- local CA ----------
 
-function renderIssued(data, { title, usage }) {
+function renderIssued(data, { title, usage, notice = '' }) {
   const actions = [];
   if (usage === 'ca') {
     actions.push('<button type="button" class="btn small primary" data-action="use-ca">Use to sign a CSR</button>');
@@ -988,6 +1010,7 @@ function renderIssued(data, { title, usage }) {
       <div class="cert-title">${escapeHtml(title)} ${data.algorithmLabel ? badge('info', data.algorithmLabel) : ''}</div>
       <div class="pem-actions">${actions.join('')}</div>
     </div>
+    ${notice ? `<div class="notice">${notice}</div>` : ''}
     ${toolWarnings(data.warnings)}
     ${section('Details', [
       row('Subject', `<span class="rdn"><b>CN</b> ${escapeHtml(data.subject)}</span>`),
@@ -1020,12 +1043,9 @@ $('caCreateForm').addEventListener('submit', e => {
   const out = $('result-ca-create');
   const intermediate = $('caKind').value === 'intermediate';
   if (!$('caCommonName').value.trim()) return showError(out, 'Common name is required.');
-  if (intermediate && !hasInput('caParentFiles', 'caParentText')) return showError(out, 'Provide the parent CA certificate and private key.');
+  if (intermediate && !hasCa(CA_PICKERS.caParent)) return showError(out, 'Choose the parent CA, or provide its certificate and private key.');
   const fd = new FormData();
-  if (intermediate) {
-    appendInputs(fd, 'caParentFiles', 'issuer', 'caParentText', 'issuerText');
-    appendIf(fd, 'issuerPassword', $('caParentPassword').value);
-  }
+  if (intermediate) appendCa(fd, CA_PICKERS.caParent);
   appendIf(fd, 'commonName', $('caCommonName').value);
   appendIf(fd, 'algorithm', $('caAlgorithm').value);
   appendIf(fd, 'hash', $('caHash').value);
@@ -1037,18 +1057,24 @@ $('caCreateForm').addEventListener('submit', e => {
   appendIf(fd, 'country', $('caCountry').value);
   appendIf(fd, 'state', $('caState').value);
   appendIf(fd, 'locality', $('caLocality').value);
-  postTool('/api/ca/create', fd, out, d => renderIssued(d, { title: d.kind === 'root' ? 'Root CA' : 'Intermediate CA', usage: 'ca' }), e.submitter);
+  const keep = $('caSave').value;
+  postTool('/api/ca/create', fd, out, d => {
+    if (keep !== 'none') keepNewCa(keep, d, out);
+    return renderIssued(d, {
+      title: d.kind === 'root' ? 'Root CA' : 'Intermediate CA', usage: 'ca',
+      notice: keep === 'none' ? 'Not kept. Copy or download the private key now, it cannot be recovered later.' : '<span id="caKeepNotice">Saving...</span>'
+    });
+  }, e.submitter);
 });
 
 $('caSignForm').addEventListener('submit', e => {
   e.preventDefault();
   const out = $('result-ca-sign');
   if (!hasInput('signCsrFiles', 'signCsrText')) return showError(out, 'Provide the certificate signing request.');
-  if (!hasInput('signCaFiles', 'signCaText')) return showError(out, 'Provide the CA certificate and private key.');
+  if (!hasCa(CA_PICKERS.sign)) return showError(out, 'Choose a CA, or provide the CA certificate and private key.');
   const fd = new FormData();
   appendInputs(fd, 'signCsrFiles', 'csr', 'signCsrText', 'csrText');
-  appendInputs(fd, 'signCaFiles', 'ca', 'signCaText', 'caText');
-  appendIf(fd, 'caPassword', $('signCaPassword').value);
+  appendCa(fd, CA_PICKERS.sign);
   appendIf(fd, 'usage', $('signUsage').value);
   appendIf(fd, 'validityDays', $('signValidity').value);
   appendIf(fd, 'sans', $('signSans').value);
@@ -1232,7 +1258,7 @@ $('devCertForm').addEventListener('submit', e => {
   e.preventDefault();
   const out = $('result-dev-cert');
   const existing = $('devCaMode').value === 'existing';
-  if (existing && !hasInput('devCaFiles', 'devCaText')) return showError(out, 'Provide the CA certificate and private key.');
+  if (existing && !hasCa(CA_PICKERS.devEx)) return showError(out, 'Choose a CA, or provide the CA certificate and private key.');
   const fd = new FormData();
   appendIf(fd, 'names', $('devNames').value);
   appendIf(fd, 'algorithm', $('devAlgorithm').value);
@@ -1241,8 +1267,7 @@ $('devCertForm').addEventListener('submit', e => {
   appendIf(fd, 'crlUrl', $('devCrlUrl').value);
   fd.append('clientAuth', $('devClientAuth').checked ? 'true' : 'false');
   if (existing) {
-    appendInputs(fd, 'devCaFiles', 'ca', 'devCaText', 'caText');
-    appendIf(fd, 'caPassword', $('devCaPassword').value);
+    appendCa(fd, CA_PICKERS.devEx);
   } else {
     appendIf(fd, 'caName', $('devCaName').value);
     appendIf(fd, 'scope', $('devScope').value);
@@ -1298,13 +1323,12 @@ function renderCrl(data) {
 $('crlForm').addEventListener('submit', e => {
   e.preventDefault();
   const out = $('result-crl');
-  if (!hasInput('crlCaFiles', 'crlCaText')) return showError(out, 'Provide the CA certificate and private key.');
+  if (!hasCa(CA_PICKERS.crl)) return showError(out, 'Choose a CA, or provide the CA certificate and private key.');
   if (!hasInput('crlCertFiles', 'crlCertText') && !$('crlSerials').value.trim() && !hasInput('crlPrevFiles', 'crlPrevText')) {
     if (!window.confirm('Nothing is selected for revocation, so the list will be empty. Create it anyway?')) return;
   }
   const fd = new FormData();
-  appendInputs(fd, 'crlCaFiles', 'ca', 'crlCaText', 'caText');
-  appendIf(fd, 'caPassword', $('crlCaPassword').value);
+  appendCa(fd, CA_PICKERS.crl);
   appendInputs(fd, 'crlCertFiles', 'cert', 'crlCertText', 'certText');
   appendIf(fd, 'serials', $('crlSerials').value);
   appendIf(fd, 'reason', $('crlReason').value);
@@ -1355,6 +1379,318 @@ $('keyToolsForm').addEventListener('submit', e => {
   appendIf(fd, 'action', $('keyAction').value);
   if (KEY_ACTIONS_WITH_PASSWORD.includes($('keyAction').value)) appendIf(fd, 'newPassword', $('keyNewPassword').value);
   postTool('/api/key-tools', fd, out, renderKeyTools, e.submitter);
+});
+
+// ---------- saved CAs (in this browser or on the server) ----------
+
+// A CA can be kept in this browser (certificate and key in local storage, unencrypted) or on the server (the key is
+// encrypted there and only its owner can use it). Either way it shows up in every CA picker.
+const caStoreName = () => `certvalidator.cas.v1:${state.user.username}`;
+
+function loadBrowserCas() {
+  try {
+    const cas = JSON.parse(localStorage.getItem(caStoreName()) || '{}');
+    return cas && typeof cas === 'object' ? cas : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveBrowserCas(cas) {
+  try {
+    localStorage.setItem(caStoreName(), JSON.stringify(cas));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+let serverCas = [];
+let casNotice = '';
+
+const allCas = () => [
+  ...serverCas.map(c => ({ ...c, where: 'server' })),
+  ...Object.entries(loadBrowserCas()).map(([id, c]) => ({ ...c, id, where: 'browser' }))
+].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+
+const findSavedCa = pick => allCas().find(c => `${c.where}:${c.id}` === pick);
+
+// Every form that takes a CA: the picker, the manual upload fields it hides, and the field names the server expects.
+const CA_PICKERS = {
+  sign: { source: 'signCaSource', manual: 'signCaManual', hint: 'signCaHint', files: 'signCaFiles', text: 'signCaText', password: 'signCaPassword', fileField: 'ca', textField: 'caText', idField: 'caId', passwordField: 'caPassword' },
+  crl: { source: 'crlCaSource', manual: 'crlCaManual', hint: 'crlCaHint', files: 'crlCaFiles', text: 'crlCaText', password: 'crlCaPassword', fileField: 'ca', textField: 'caText', idField: 'caId', passwordField: 'caPassword' },
+  devEx: { source: 'devExCaSource', manual: 'devExCaManual', hint: 'devExCaHint', files: 'devCaFiles', text: 'devCaText', password: 'devCaPassword', fileField: 'ca', textField: 'caText', idField: 'caId', passwordField: 'caPassword' },
+  caParent: { source: 'caParentCaSource', manual: 'caParentCaManual', hint: 'caParentCaHint', files: 'caParentFiles', text: 'caParentText', password: 'caParentPassword', fileField: 'issuer', textField: 'issuerText', idField: 'issuerId', passwordField: 'issuerPassword' },
+  issue: { source: 'issueCaSource', manual: 'issueCaManual', hint: 'issueCaHint', files: 'issueCaFiles', text: 'issueCaText', password: 'issueCaPassword', fileField: 'ca', textField: 'caText', idField: 'caId', passwordField: 'caPassword' }
+};
+
+const CA_HINTS = {
+  server: 'Saved on the server. Its key stays there, encrypted, and is only used to sign.',
+  browser: 'Saved in this browser. Its key is sent to the server for this request only, held in memory and never stored.'
+};
+
+function syncCaPicker(p) {
+  const value = $(p.source).value || '';
+  $(p.manual).hidden = value !== '';
+  $(p.hint).textContent = CA_HINTS[value.split(':')[0]] || '';
+  $(p.hint).hidden = value === '';
+}
+
+function fillCaPickers() {
+  const cas = allCas();
+  const option = c => `<option value="${escapeHtml(`${c.where}:${c.id}`)}">${escapeHtml(c.name)}${new Date(c.notAfter) < new Date() ? ' (expired)' : ''}</option>`;
+  const group = (label, where) => {
+    const list = cas.filter(c => c.where === where);
+    return list.length ? `<optgroup label="${label}">${list.map(option).join('')}</optgroup>` : '';
+  };
+  for (const p of Object.values(CA_PICKERS)) {
+    const select = $(p.source);
+    const previous = select.value;
+    select.innerHTML = `<option value="">Upload or paste a CA...</option>${group('Saved on the server', 'server')}${group('Saved in this browser', 'browser')}`;
+    const stillThere = cas.some(c => `${c.where}:${c.id}` === previous);
+    // Pick the newest saved CA the first time, then leave the choice alone.
+    select.value = stillThere ? previous : (p.touched || !cas.length ? '' : `${cas[0].where}:${cas[0].id}`);
+    syncCaPicker(p);
+  }
+}
+
+for (const p of Object.values(CA_PICKERS)) {
+  $(p.source).addEventListener('change', () => {
+    p.touched = true;
+    syncCaPicker(p);
+  });
+}
+
+// Has the user chosen a CA (saved, or uploaded / pasted)?
+const hasCa = p => ($(p.source).value ? true : hasInput(p.files, p.text));
+
+// Add the chosen CA to a request: its id for a server CA, its PEM for a browser CA, else the uploaded inputs.
+function appendCa(fd, p) {
+  const value = $(p.source).value || '';
+  if (value.startsWith('server:')) {
+    fd.append(p.idField, value.slice('server:'.length));
+  } else if (value.startsWith('browser:')) {
+    const ca = loadBrowserCas()[value.slice('browser:'.length)];
+    if (ca) fd.append(p.textField, ca.certificatePem + (ca.chainPem || '') + ca.privateKeyPem);
+  } else {
+    appendInputs(fd, p.files, p.fileField, p.text, p.textField);
+    appendIf(fd, p.passwordField, $(p.password).value);
+  }
+}
+
+function updateCaCount() {
+  const n = allCas().length;
+  $('casCount').textContent = n;
+  $('casCount').hidden = n === 0;
+}
+
+async function refreshCas() {
+  try {
+    const response = await api('/api/cas');
+    const data = await response.json();
+    if (response.ok) serverCas = data.cas || [];
+  } catch (err) { /* keep what we have */ }
+  updateCaCount();
+  fillCaPickers();
+  drawCas();
+}
+
+// Keep a CA. `fd` holds the CA inputs (files or text, and a password if needed). Resolves to the saved CA's name.
+async function keepCa(where, fd, name) {
+  if (where === 'server') {
+    appendIf(fd, 'name', name);
+    const response = await api('/api/cas', { method: 'POST', body: fd });
+    const data = await response.json();
+    if (!response.ok || data.error) throw new Error(data.error || 'The CA could not be saved.');
+    await refreshCas();
+    return data.ca.name;
+  }
+  const response = await api('/api/cas/check', { method: 'POST', body: fd });
+  const ca = await response.json();
+  if (!response.ok || ca.error) throw new Error(ca.error || 'The CA could not be read.');
+  const cas = loadBrowserCas();
+  const displayName = (name || '').trim() || ca.subject;
+  cas[newId()] = { ...ca, name: displayName, createdAt: new Date().toISOString() };
+  if (!saveBrowserCas(cas)) throw new Error('This browser would not store the CA (storage is unavailable or full).');
+  await refreshCas();
+  return displayName;
+}
+
+// After Create CA: keep the new CA where the user asked and say so next to the result.
+function keepNewCa(where, data, out) {
+  const fd = new FormData();
+  fd.append('caText', data.certificatePem + (data.chainPem || '') + data.privateKeyPem);
+  keepCa(where, fd, data.subject).then(name => {
+    out.querySelector('#caKeepNotice').innerHTML = where === 'server'
+      ? `Saved to <b>My CAs</b> as <b>${escapeHtml(name)}</b>. The key is kept on the server, encrypted, and only you can use it.`
+      : `Saved to <b>My CAs</b> as <b>${escapeHtml(name)}</b>. The key is kept in this browser only, never on the server.`;
+  }).catch(err => {
+    out.querySelector('#caKeepNotice').textContent = `Could not keep this CA: ${err.message} Copy or download the private key now.`;
+  });
+}
+
+function renderSavedCa(c) {
+  const expired = new Date(c.notAfter) < new Date();
+  const where = c.where === 'server' ? badge('info', 'On the server') : badge('warn', 'This browser');
+  const pick = escapeHtml(`${c.where}:${c.id}`);
+  const button = (action, label, extra = '') => `<button type="button" class="btn small${extra}" data-action="${action}" data-pick="${pick}">${label}</button>`;
+  return `<div class="cert">
+    <div class="cert-header">
+      <div class="cert-title">${escapeHtml(c.name)} ${where} ${c.keyDescription ? badge('info', c.keyDescription) : ''} ${expired ? badge('bad', 'Expired') : ''}</div>
+    </div>
+    ${section('Details', [
+      row('Subject', `<span class="rdn"><b>CN</b> ${escapeHtml(c.subject)}</span>`),
+      row('Issuer', c.selfSigned ? '<span class="muted">Self-signed root</span>' : escapeHtml(c.issuer)),
+      row('Valid from', escapeHtml(formatDate(c.notBefore))),
+      row('Valid to', escapeHtml(formatDate(c.notAfter))),
+      row('Path length', c.pathLength === null || c.pathLength === undefined ? '' : escapeHtml(String(c.pathLength))),
+      row('Name restrictions', c.limited ? 'Yes, it can only issue for the names it is limited to' : ''),
+      row('Key kept', c.where === 'server' ? 'On the server, encrypted (only you can use it)' : 'In this browser only (unencrypted)'),
+      row('SHA-256', escapeHtml(c.fingerprintSha256), { mono: true })
+    ])}
+    <div class="pem-actions ca-actions">
+      ${expired ? '' : button('ca-issue', 'Issue certificate', ' primary')}
+      ${expired ? '' : button('ca-sign-with', 'Sign a CSR')}
+      ${expired ? '' : button('ca-crl-with', 'Revoke / CRL')}
+      ${button('ca-download-cert', 'Download certificate')}
+      ${button('ca-download-key', 'Download key')}
+      ${button('ca-rename', 'Rename')}
+      ${button('ca-delete', 'Delete', ' danger')}
+    </div>
+  </div>`;
+}
+
+function drawCas() {
+  const list = allCas();
+  $('result-cas').innerHTML = (casNotice ? `<div class="notice">${casNotice}</div>` : '') +
+    (list.length ? list.map(renderSavedCa).join('') : '<p class="muted">No saved CAs yet. Add one on the left, or tick "Keep this CA" when you create one.</p>');
+}
+
+function useSavedCa(pick, target) {
+  const p = CA_PICKERS[target];
+  fillCaPickers();
+  p.touched = true;
+  $(p.source).value = pick;
+  syncCaPicker(p);
+  showView(target === 'issue' ? 'issue' : target === 'sign' ? 'ca-sign' : 'crl');
+}
+
+async function downloadCaKey(pick) {
+  const ca = findSavedCa(pick);
+  if (!ca) return;
+  let key = ca.privateKeyPem;
+  if (ca.where === 'server') {
+    try {
+      const response = await api(`/api/cas/${encodeURIComponent(ca.id)}/key`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Could not load the key.');
+      key = data.privateKeyPem;
+    } catch (err) {
+      casNotice = escapeHtml(err.message);
+      return drawCas();
+    }
+  }
+  saveBlob(new Blob([key], { type: 'application/x-pem-file' }), `${slug(ca.name)}-ca-key.pem`);
+}
+
+async function renameSavedCa(pick) {
+  const ca = findSavedCa(pick);
+  const name = ca && window.prompt('Rename', ca.name);
+  if (!name || !name.trim()) return;
+  if (ca.where === 'server') {
+    if (await historyRequest('PATCH', `/api/cas/${encodeURIComponent(ca.id)}`, { name: name.trim() })) refreshCas();
+  } else {
+    const cas = loadBrowserCas();
+    if (cas[ca.id]) cas[ca.id].name = name.trim().slice(0, 80);
+    saveBrowserCas(cas);
+    refreshCas();
+  }
+}
+
+async function deleteSavedCa(pick) {
+  const ca = findSavedCa(pick);
+  if (!ca || !window.confirm(`Delete "${ca.name}"? Its private key is removed too and cannot be recovered unless you downloaded it.`)) return;
+  if (ca.where === 'server') {
+    if (!(await historyRequest('DELETE', `/api/cas/${encodeURIComponent(ca.id)}`))) return;
+  } else {
+    const cas = loadBrowserCas();
+    delete cas[ca.id];
+    saveBrowserCas(cas);
+  }
+  casNotice = '';
+  refreshCas();
+}
+
+const WHERE_HINTS = {
+  server: 'The key is stored encrypted on the server and only you can use it. It can sign for you from any browser. Anyone with access to the server and its VAULT_KEY or data folder could still decrypt it, so keep production CAs offline.',
+  browser: 'The key stays in this browser only (unencrypted local storage) and is sent to the server just while it signs. It is lost if you clear site data, so download a copy.'
+};
+$('casWhere').addEventListener('change', () => { $('casWhereHint').textContent = WHERE_HINTS[$('casWhere').value] || ''; });
+$('casWhereHint').textContent = WHERE_HINTS[$('casWhere').value] || '';
+$('caSave').addEventListener('change', () => { $('caSaveHint').textContent = WHERE_HINTS[$('caSave').value] || 'Nothing is kept: the key is shown once and never stored.'; });
+$('caSaveHint').textContent = WHERE_HINTS[$('caSave').value] || '';
+
+$('casAddForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  if (!hasInput('casFiles', 'casText')) {
+    casNotice = 'Provide the CA certificate and its private key.';
+    return drawCas();
+  }
+  const fd = new FormData();
+  appendInputs(fd, 'casFiles', 'ca', 'casText', 'caText');
+  appendIf(fd, 'caPassword', $('casPassword').value);
+  const where = $('casWhere').value;
+  const submit = e.submitter;
+  if (submit) submit.disabled = true;
+  try {
+    const name = await keepCa(where, fd, $('casName').value);
+    casNotice = `Saved <b>${escapeHtml(name)}</b> ${where === 'server' ? 'on the server' : 'in this browser'}. It is now available in the CA pickers.`;
+    ['casFiles', 'casText', 'casPassword', 'casName'].forEach(id => { $(id).value = ''; });
+  } catch (err) {
+    casNotice = escapeHtml(err.message === 'Failed to fetch' ? 'Request failed. Is the server running?' : err.message);
+  } finally {
+    if (submit) submit.disabled = false;
+  }
+  drawCas();
+});
+
+// ---------- issue a certificate and key from a CA ----------
+
+$('issueForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const out = $('result-issue');
+  if (!hasCa(CA_PICKERS.issue)) return showError(out, 'Choose a CA, or provide the CA certificate and private key.');
+  if (!$('issueCommonName').value.trim()) return showError(out, 'Common name is required.');
+  const fd = new FormData();
+  appendCa(fd, CA_PICKERS.issue);
+  appendIf(fd, 'commonName', $('issueCommonName').value);
+  appendIf(fd, 'sans', $('issueSans').value);
+  appendIf(fd, 'algorithm', $('issueAlgorithm').value);
+  appendIf(fd, 'validityDays', $('issueValidity').value);
+  appendIf(fd, 'usage', $('issueUsage').value);
+  appendIf(fd, 'hash', $('issueHash').value);
+  appendIf(fd, 'crlUrl', $('issueCrlUrl').value);
+  appendIf(fd, 'organization', $('issueOrg').value);
+  appendIf(fd, 'organizationalUnit', $('issueOu').value);
+  appendIf(fd, 'country', $('issueCountry').value);
+  appendIf(fd, 'state', $('issueState').value);
+  appendIf(fd, 'locality', $('issueLocality').value);
+
+  const submit = e.submitter;
+  if (submit) submit.disabled = true;
+  out.textContent = 'Working...';
+  try {
+    const response = await api('/api/ca/issue', { method: 'POST', body: fd });
+    const data = await response.json();
+    if (!response.ok || data.error) return showError(out, data.error || 'The request failed.');
+    const entry = { ...data, name: `${data.subject} (issued)`, isCA: false, createdAt: new Date().toISOString() };
+    const notice = await saveToHistory(entry, data.privateKeyPem, $('issueSave').value);
+    out.innerHTML = renderIssued(data, { title: 'Issued certificate', usage: 'leaf', notice });
+  } catch (err) {
+    showError(out, err.message === 'Failed to fetch' ? 'Request failed. Is the server running?' : err.message);
+  } finally {
+    if (submit) submit.disabled = false;
+  }
 });
 
 // ---------- session ----------
@@ -1494,5 +1830,6 @@ fetch('/api/version')
   showUser(status);
   loadAlgorithms();
   updateHistoryCount();
+  refreshCas();
   showView(location.hash.slice(1) || 'file');
 })();

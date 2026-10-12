@@ -852,3 +852,6 @@ table.grid td.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas,
 .guide .pem-block { margin-top: 10px; }
 .guide .pem-block pre { max-height: 180px; }
 .guide p.muted { margin: 8px 0 0; }
+
+.ca-actions { flex-wrap: wrap; margin-top: 12px; }
+.ca-source { width: 100%; }

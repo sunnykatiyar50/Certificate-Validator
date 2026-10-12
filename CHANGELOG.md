@@ -6,6 +6,12 @@ Add your notes under **Unreleased** as you work. `node scripts/release.js` moves
 
 ## Unreleased
 
+### Added
+- **My CAs:** upload a CA you already have, or keep one you create, and choose it from a list wherever a CA is needed. Keep it in this browser only, on the server (key encrypted, visible only to you), or not at all.
+- **Issue Certificate:** make a new private key and a certificate from a saved CA in one step, with no CSR.
+- Generated key pairs (Generate Keys and Issue Certificate) can now keep their private key on the server, encrypted, as well as in the browser.
+- Optional `VAULT_KEY` setting for the key that protects what is kept on the server.
+
 ## 2.3.1 - 2026-10-12
 
 ### Added
