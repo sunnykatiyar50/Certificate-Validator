@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const tls = require('node:tls');
 const { createApp, parseTrustProxy } = require('../server');
 const { isBlockedAddress } = require('../lib/liveCheck');
-const { DAY, createCert, privateKeyPem } = require('./helpers');
+const { DAY, createCert, privateKeyPem, noAuth } = require('./helpers');
 
 function listen(app) {
   return new Promise(resolve => {
@@ -32,7 +32,7 @@ async function postFile(base, name, content, extra = {}) {
 }
 
 test('validate-certificate endpoint', async t => {
-  const { server, base } = await listen(createApp({ enableRateLimit: false }));
+  const { server, base } = await listen(createApp({ auth: noAuth, enableRateLimit: false }));
   t.after(() => close(server));
 
   const root = await createCert({ name: 'CN=Endpoint Root', isCA: true });
@@ -99,7 +99,7 @@ test('validate-certificate endpoint', async t => {
 });
 
 test('rate limiting applies to live checks', async t => {
-  const { server, base } = await listen(createApp());
+  const { server, base } = await listen(createApp({ auth: noAuth }));
   t.after(() => close(server));
   let lastStatus;
   for (let i = 0; i < 12; i++) {
@@ -121,7 +121,7 @@ test('isBlockedAddress covers private and reserved ranges', () => {
 });
 
 test('live check endpoint', async t => {
-  const blockedApp = await listen(createApp({ enableRateLimit: false }));
+  const blockedApp = await listen(createApp({ auth: noAuth, enableRateLimit: false }));
   t.after(() => close(blockedApp.server));
 
   const post = (base, body) => fetch(`${base}/api/check-host`, {
@@ -153,7 +153,7 @@ test('live check endpoint', async t => {
   t.after(() => close(tlsServer));
   const tlsPort = tlsServer.address().port;
 
-  const openApp = await listen(createApp({ enableRateLimit: false, allowPrivateHosts: true }));
+  const openApp = await listen(createApp({ auth: noAuth, enableRateLimit: false, allowPrivateHosts: true }));
   t.after(() => close(openApp.server));
 
   await t.test('fetches and analyses the chain a server presents', async () => {
@@ -175,7 +175,7 @@ test('live check endpoint', async t => {
 });
 
 test('health and version endpoints', async t => {
-  const { server, base } = await listen(createApp({ enableRateLimit: false }));
+  const { server, base } = await listen(createApp({ auth: noAuth, enableRateLimit: false }));
   t.after(() => close(server));
   assert.deepEqual(await (await fetch(`${base}/healthz`)).json(), { status: 'ok' });
   const { version } = await (await fetch(`${base}/api/version`)).json();
@@ -183,7 +183,7 @@ test('health and version endpoints', async t => {
 });
 
 test('key pair generation endpoint', async t => {
-  const { server, base } = await listen(createApp({ enableRateLimit: false }));
+  const { server, base } = await listen(createApp({ auth: noAuth, enableRateLimit: false }));
   t.after(() => close(server));
   const crypto = require('node:crypto');
   const generate = body => fetch(`${base}/api/generate-keypair`, {
@@ -266,7 +266,7 @@ test('TRUST_PROXY values are converted for Express', () => {
   try {
     for (const value of ['true', '1', 'false', 'loopback, 172.16.0.0/12', '10.0.0.1']) {
       process.env.TRUST_PROXY = value;
-      assert.doesNotThrow(() => createApp({ enableRateLimit: false }), value);
+      assert.doesNotThrow(() => createApp({ auth: noAuth, enableRateLimit: false }), value);
     }
   } finally {
     if (original === undefined) delete process.env.TRUST_PROXY; else process.env.TRUST_PROXY = original;

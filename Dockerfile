@@ -10,9 +10,9 @@ FROM node:22-alpine
 ARG VERSION=""
 ARG REVISION=""
 
-LABEL org.opencontainers.image.title="Certificate Validator" \
-      org.opencontainers.image.description="Validate X.509 certificates, certificate chains and live TLS sites" \
-      org.opencontainers.image.source="https://github.com/sunnykatiyar50/Certificate-Validator" \
+LABEL org.opencontainers.image.title="Certificate Workbench" \
+      org.opencontainers.image.description="Validate, decode, convert and create X.509 certificates, keys and CSRs" \
+      org.opencontainers.image.source="https://github.com/sunnykatiyar50/Certificate-Workbench" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${REVISION}"
 
@@ -24,8 +24,14 @@ WORKDIR /app
 COPY --from=deps /app/node_modules node_modules
 COPY package.json server.js ./
 COPY lib lib
-COPY data data
+COPY trust-data trust-data
 COPY public public
+COPY scripts/hash-password.js scripts/hash-password.js
+
+# The history database lives here; mount a volume to keep it across container restarts.
+RUN mkdir -p /app/data && chown node:node /app/data
+ENV DATA_DIR=/app/data
+VOLUME ["/app/data"]
 
 USER node
 EXPOSE 33003

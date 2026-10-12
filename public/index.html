@@ -3,13 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Certificate Validator</title>
+  <title>Certificate Workbench</title>
   <link rel="stylesheet" href="style.css">
+  <script src="theme.js"></script>
 </head>
 <body>
   <div class="app">
     <aside class="sidebar">
-      <div class="brand">Certificate<br>Validator</div>
+      <div class="brand">Certificate<br>Workbench</div>
       <nav class="nav">
         <div class="nav-group">Validate</div>
         <button type="button" class="nav-item active" data-view="file">File Upload</button>
@@ -29,7 +30,16 @@
         <button type="button" class="nav-item" data-view="convert">Convert Formats</button>
       </nav>
       <div class="sidebar-foot">
-        <p>Uploaded files, pasted text and any keys you supply are processed in memory and discarded right after the request. Generated keys are never stored on the server; history lives only in this browser.</p>
+        <div class="sidebar-user" id="userChip" hidden>
+          <div class="avatar" id="userAvatar"></div>
+          <div class="user-meta">
+            <div class="user-name" id="userName"></div>
+            <span class="badge info" id="userRole"></span>
+          </div>
+        </div>
+        <button type="button" class="nav-item subtle" data-theme-toggle></button>
+        <button type="button" class="nav-item subtle" id="signOutBtn" hidden>Sign out</button>
+        <p>Uploaded files, pasted text and any keys you supply are processed in memory and discarded right after the request. Private keys are never stored on the server.</p>
         <div id="version"></div>
       </div>
     </aside>
@@ -146,11 +156,11 @@
 
             <label for="genHistory">Save to history</label>
             <select id="genHistory">
-              <option value="with">Yes, including the private key</option>
+              <option value="with">Yes, and keep the private key in this browser</option>
               <option value="without">Yes, without the private key</option>
               <option value="none">No, don't save</option>
             </select>
-            <p class="hint warn-text">History is stored unencrypted in this browser. Don't keep private keys for anything sensitive on a shared computer.</p>
+            <p class="hint">History is saved on the server under your account (administrators can see everyone's history). The private key is never sent for storage: if you keep it, it stays in this browser only, unencrypted.</p>
 
             <div class="actions">
               <button type="submit" class="btn primary">Generate</button>
@@ -164,8 +174,13 @@
         <div class="input card">
           <div class="card-head">
             <h2>History</h2>
-            <button type="button" class="btn small" data-action="clear-history" id="clearHistoryBtn" hidden>Clear all</button>
+            <button type="button" class="btn small" data-action="clear-history" id="clearHistoryBtn" hidden>Clear mine</button>
           </div>
+          <div id="historyAdminBar" class="history-bar" hidden>
+            <label for="historyOwner">Show history for</label>
+            <select id="historyOwner"></select>
+          </div>
+          <div id="legacyBanner" class="notice history-banner" hidden></div>
           <div id="historyList" class="history-list"></div>
         </div>
         <div class="output" id="result-history" data-empty="Select an item to see its details."></div>

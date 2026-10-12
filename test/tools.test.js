@@ -12,7 +12,7 @@ const { matchKeys } = require('../lib/match');
 const { analyzeChain } = require('../lib/analysis');
 const { parseEmbeddedScts } = require('../lib/sct');
 const { lookupRoot } = require('../lib/rootStores');
-const { DAY, createCert, privateKeyPem } = require('./helpers');
+const { DAY, createCert, privateKeyPem, noAuth } = require('./helpers');
 
 x509.cryptoProvider.set(crypto.webcrypto);
 
@@ -231,7 +231,7 @@ test('CSR from an existing key', async t => {
 });
 
 test('Certificate Transparency SCT parsing', async t => {
-  const logs = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'ct-logs.json'), 'utf8')).logs;
+  const logs = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'trust-data', 'ct-logs.json'), 'utf8')).logs;
   const [knownId, known] = Object.entries(logs)[0];
 
   const sct = (logId, ms) => {
@@ -280,7 +280,7 @@ test('Certificate Transparency SCT parsing', async t => {
 });
 
 test('root program membership', async t => {
-  const data = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'root-stores.json'), 'utf8'));
+  const data = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'trust-data', 'root-stores.json'), 'utf8'));
 
   await t.test('looks up a root by fingerprint', () => {
     const fp = data.stores.apple.find(f => data.stores.chrome.includes(f) && data.stores.microsoft.includes(f));
@@ -311,7 +311,7 @@ test('root program membership', async t => {
 });
 
 test('tool endpoints', async t => {
-  const { server, base } = await listen(createApp({ enableRateLimit: false }));
+  const { server, base } = await listen(createApp({ auth: noAuth, enableRateLimit: false }));
   t.after(() => close(server));
 
   await t.test('convert returns files, with the PFX as base64', async () => {

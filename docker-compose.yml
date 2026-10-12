@@ -5,9 +5,9 @@
 # APP_VERSION selects the image tag and is stamped into the build. It defaults to "latest".
 # Find the current version with: node scripts/release.js --show
 services:
-  certificate-validator:
-    container_name: cert-validator
-    image: ghcr.io/sunnykatiyar50/certificate-validator:${APP_VERSION:-latest}
+  certificate-workbench:
+    container_name: cert-workbench
+    image: ghcr.io/sunnykatiyar50/certificate-workbench:${APP_VERSION:-latest}
     build:
       context: .
       args:
@@ -16,12 +16,24 @@ services:
     ports:
       - "${HOST_PORT:-33003}:33003"
     environment:
+      # Sign-in. See sample.env. Compose refuses to start until the two required values are set.
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env (copy sample.env)}
+      USERS: ${USERS:-}
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env (copy sample.env)}
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-12}
       # Set to 1 when running behind a reverse proxy so rate limiting sees client IPs.
       TRUST_PROXY: ${TRUST_PROXY:-}
       CORS_ORIGIN: ${CORS_ORIGIN:-}
+    volumes:
+      # User history database (the root filesystem is read-only).
+      - cert-workbench-data:/app/data
     restart: unless-stopped
     read_only: true
     cap_drop:
       - ALL
     security_opt:
       - no-new-privileges:true
+
+volumes:
+  cert-workbench-data:

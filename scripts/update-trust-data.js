@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Refresh data/root-stores.json and data/ct-logs.json.
+// Refresh trust-data/root-stores.json and trust-data/ct-logs.json.
 //
 // root-stores.json: SHA-256 fingerprints of the root certificates that the Apple, Chrome and
 // Microsoft root programs currently include, taken from the CCADB (https://www.ccadb.org/).
@@ -13,7 +13,7 @@ const path = require('path');
 const ALL_RECORDS_URL = 'https://ccadb.my.salesforce-sites.com/ccadb/AllCertificateRecordsCSVFormatv4';
 const MICROSOFT_URL = 'https://ccadb.my.salesforce-sites.com/microsoft/IncludedCACertificateReportForMSFTCSV';
 const CT_LOG_LIST_URL = 'https://www.gstatic.com/ct/log_list/v3/log_list.json';
-const DATA_DIR = path.join(__dirname, '..', 'data');
+const DATA_DIR = path.join(__dirname, '..', 'trust-data');
 
 // Minimal RFC 4180 parser (quoted fields, doubled quotes, newlines inside quotes).
 function parseCsv(text) {

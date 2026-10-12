@@ -5,7 +5,9 @@
 .env*
 **/node_modules
 test
-scripts
+scripts/*
+!scripts/hash-password.js
+data
 docker-compose.yml
 Dockerfile
 *.md
