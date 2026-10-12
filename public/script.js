@@ -151,7 +151,26 @@ function renderChain(data) {
     <div class="muted">${path}</div>
     ${chain.unusedCerts.length ? `<div class="muted">Not part of the chain: ${chain.unusedCerts.map(i => escapeHtml(certLabel(data.certs[i], i))).join(', ')}</div>` : ''}
     <div class="muted">Trust store: ${escapeHtml(chain.trustStore)}</div>
+    ${renderPlatforms(chain.platformTrust)}
   </div>`;
+}
+
+function renderPlatforms(trust) {
+  if (!trust) return '';
+  const kinds = { trusted: 'good', 'not-trusted': 'bad', expired: 'bad', unknown: 'warn' };
+  const labels = { trusted: 'trusted', 'not-trusted': 'not trusted', expired: 'expired chain', unknown: 'unknown' };
+  const asOf = trust.asOf ? ` Apple, Chrome and Microsoft use CCADB root-store data from ${escapeHtml(trust.asOf)}.` : '';
+  return `<div class="platforms">${trust.platforms.map(p => badge(kinds[p.status] || 'warn', `${p.name}: ${labels[p.status] || p.status}`)).join(' ')}</div>
+    <div class="muted">Whether the chain's root is in each root program.${asOf}</div>`;
+}
+
+function renderScts(scts) {
+  if (!scts || !scts.length) return '';
+  const rows = scts.map((s, i) => row(`SCT ${i + 1}`,
+    `<b>${escapeHtml(s.logName || 'Unknown log')}</b>${s.logOperator ? ` (${escapeHtml(s.logOperator)})` : ''}${s.logState && s.logState !== 'usable' ? ' ' + badge('warn', s.logState) : ''}
+     <div class="muted">Logged ${escapeHtml(formatDate(s.timestamp))}${s.signatureAlgorithm ? ' &middot; ' + escapeHtml(s.signatureAlgorithm) : ''}</div>
+     ${s.logName ? '' : `<div class="muted mono">Log ID ${escapeHtml(s.logId)}</div>`}`));
+  return section('Certificate Transparency', [row('Embedded SCTs', escapeHtml(String(scts.length))), ...rows]);
 }
 
 function renderHostname(check) {
@@ -239,6 +258,7 @@ function renderCert(cert, idx, certs) {
       row('Key usage', chips(cert.keyUsage || [])),
       row('Extended key usage', chips(cert.extKeyUsage || []))
     ])}
+    ${renderScts(cert.scts)}
     </div>
   </div>`;
 }
@@ -728,6 +748,37 @@ $('decodeForm').addEventListener('submit', e => {
   appendInputs(fd, 'decodeFiles', 'files', 'decodeText', 'text');
   appendIf(fd, 'password', $('decodePassword').value);
   postTool('/api/decode', fd, out, renderDecode, e.submitter);
+});
+
+// ---------- match key pair ----------
+
+const KIND_LABELS = { 'private-key': 'Private key', certificate: 'Certificate', csr: 'CSR', 'public-key': 'Public key' };
+
+function renderMatch(data) {
+  const byId = new Map(data.items.map(i => [i.id, i]));
+  let html = '';
+  if (data.verdicts.length) {
+    html += `<div class="panel"><div class="panel-title">Result</div><ul class="warnings">${data.verdicts.map(v => v.matches
+      ? `<li>${badge('good', 'Match')} ${escapeHtml(v.subject)} belongs with ${v.partners.map(p => `<b>${escapeHtml(p)}</b>`).join(', ')}</li>`
+      : `<li>${badge('bad', 'No match')} ${escapeHtml(v.subject)} does not match any certificate or CSR you supplied</li>`).join('')}</ul></div>`;
+  }
+  html += data.groups.map(g => `<div class="panel">
+    <div class="panel-title">Public key ${g.number} &middot; ${escapeHtml(g.algorithm)} ${g.matched ? badge('good', `shared by ${g.members.length} items`) : badge('info', 'only one item')}</div>
+    <ul class="warnings">${g.members.map(id => { const i = byId.get(id); return `<li>${badge(i.kind === 'private-key' ? 'warn' : 'info', KIND_LABELS[i.kind])} ${escapeHtml(i.label)}</li>`; }).join('')}</ul>
+    <div class="muted mono">Key ID ${escapeHtml(g.keyId)}</div>
+  </div>`).join('');
+  if (data.notes && data.notes.length) html += `<div class="note-warn">${data.notes.map(escapeHtml).join(' ')}</div>`;
+  return html;
+}
+
+$('matchForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const out = $('result-match');
+  if (!hasInput('matchFiles', 'matchText')) return showError(out, 'Choose files or paste a key, certificate or CSR.');
+  const fd = new FormData();
+  appendInputs(fd, 'matchFiles', 'files', 'matchText', 'text');
+  appendIf(fd, 'password', $('matchPassword').value);
+  postTool('/api/match', fd, out, renderMatch, e.submitter);
 });
 
 // ---------- CSR from an existing key ----------

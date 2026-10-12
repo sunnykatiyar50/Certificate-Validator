@@ -1,0 +1,351 @@
+{
+ "generatedAt": "2026-10-12",
+ "source": "https://www.gstatic.com/ct/log_list/v3/log_list.json",
+ "logs": {
+  "1219ENGn9XfCx+lf1wC/+YLJM1pl4dCzAXMXwMjFaXc=": {
+   "name": "Google 'Argon2026h2' log",
+   "operator": "Google",
+   "state": "usable"
+  },
+  "1tWNqdAXU/NqSqDHV0kCr+vH3CzTjNn3ZMgMiRkenwI=": {
+   "name": "Google 'Argon2027h1'",
+   "operator": "Google",
+   "state": "usable"
+  },
+  "2AlVO5RPev/IFhlvlE+Fq7D4/F6HVSYPFdEucrtFSxQ=": {
+   "name": "Google 'Xenon2026h2' log",
+   "operator": "Google",
+   "state": "usable"
+  },
+  "RMK9DOkUDmSlyUoBkwpaobs1lw4A7hEWiWgqHETXtWY=": {
+   "name": "Google 'Xenon2027h1'",
+   "operator": "Google",
+   "state": "usable"
+  },
+  "utuIpG+cr6QJDoLlk1bbbni0pT9YLbCBl5UkLym2jJg=": {
+   "name": "Google 'ParcelYard2026h2' log",
+   "operator": "Google",
+   "state": "usable"
+  },
+  "HIl0B+YBCgEpO7Z439ejaM6xjMpSHcyk04bkoy5bXQQ=": {
+   "name": "Google 'ParcelYard2027h1' log",
+   "operator": "Google",
+   "state": "usable"
+  },
+  "aYS3IzyydLLRRn2l4EDXH+upCiHniGU3Srn5vPhocjc=": {
+   "name": "Google 'ParcelYard2027h2' log",
+   "operator": "Google",
+   "state": "usable"
+  },
+  "IPBfqqOkkvxqwUjMM6ICNhhrSfqpfmuzkk+yXsNrHDU=": {
+   "name": "Google 'PlumbersArms2026h2' log",
+   "operator": "Google",
+   "state": "usable"
+  },
+  "X/nA+6QtrHjOZELrGazggaKb1OL7U68MYzB55QWCBMk=": {
+   "name": "Google 'PlumbersArms2027h1' log",
+   "operator": "Google",
+   "state": "usable"
+  },
+  "M3qex8rmqQSLdS8tk65+SyqQLSG0lxKdg+J5x1PJL4w=": {
+   "name": "Google 'PlumbersArms2027h2' log",
+   "operator": "Google",
+   "state": "usable"
+  },
+  "yzj3FYl8hKFEX1vB3fvJbvKaWc1HCmkFhbDLFMMUWOc=": {
+   "name": "Cloudflare 'Nimbus2026'",
+   "operator": "Cloudflare",
+   "state": "usable"
+  },
+  "TGPcmOWcHauI9h6KPd6uj6tEozd7X5uUw/uhnPzBviY=": {
+   "name": "Cloudflare 'Nimbus2027'",
+   "operator": "Cloudflare",
+   "state": "usable"
+  },
+  "wjF+V0UZo0XufzjespBB68fCIVoiv3/Vta12mtkOUs0=": {
+   "name": "DigiCert 'Wyvern2026h2'",
+   "operator": "DigiCert",
+   "state": "usable"
+  },
+  "ABpdGhwtk3W2SFV4+C9xoa5u7zl9KXyK4xV7yt7hoB4=": {
+   "name": "DigiCert 'Wyvern2027h1'",
+   "operator": "DigiCert",
+   "state": "usable"
+  },
+  "N6oHzCFvLm2RnHCdJNj3MbAPKxR8YhzAkaX6GoTYFt0=": {
+   "name": "DigiCert 'Wyvern2027h2'",
+   "operator": "DigiCert",
+   "state": "usable"
+  },
+  "lE5Dh/rswe+B8xkkJqgYZQHH0184AgE/cmd9VTcuGdg=": {
+   "name": "DigiCert 'Sphinx2026h2'",
+   "operator": "DigiCert",
+   "state": "usable"
+  },
+  "RqI5Z8YNtkaHxm89+ZmUdpOmphEghFfVVefj0KHZtkY=": {
+   "name": "DigiCert 'sphinx2027h1'",
+   "operator": "DigiCert",
+   "state": "usable"
+  },
+  "H7D4qS2K3aEhd2wF4qouFbrLxitlOTaVV2qqtS4R0R0=": {
+   "name": "DigiCert 'sphinx2027h2'",
+   "operator": "DigiCert",
+   "state": "usable"
+  },
+  "lLHBirDQV8R74KwEDh8svI3DdXJ7yVHyClJhJoY7pzw=": {
+   "name": "Sectigo 'Mammoth2026h2'",
+   "operator": "Sectigo",
+   "state": "readonly"
+  },
+  "H1bRq5RwSkHdP+r99GmTVTAsFDG/5hNGCJ//rnldzC8=": {
+   "name": "Sectigo 'Sabre2026h2'",
+   "operator": "Sectigo",
+   "state": "readonly"
+  },
+  "r2eIO1ewTt2Pptl+9i6o64EKx3Fg8CReVdYML+eFhzo=": {
+   "name": "Sectigo 'Elephant2026h2'",
+   "operator": "Sectigo",
+   "state": "usable"
+  },
+  "YEyar3p/d18B1Ab8kg3ImesLHH34yVIb+voXdzuXi8k=": {
+   "name": "Sectigo 'Elephant2027h1'",
+   "operator": "Sectigo",
+   "state": "usable"
+  },
+  "okkM3NuOM6QAMhdg1tTVGiA2GR6nfZaL4mqKAPb///c=": {
+   "name": "Sectigo 'Elephant2027h2'",
+   "operator": "Sectigo",
+   "state": "usable"
+  },
+  "yKPEf8ezrbk1awE/anoSbeM6TkOlxkb5l605dZkdz5o=": {
+   "name": "Sectigo 'Tiger2026h2'",
+   "operator": "Sectigo",
+   "state": "usable"
+  },
+  "HJ9oLOn68EVpUPgbloqH3dsyENhM5siy44JSSsTPWZ8=": {
+   "name": "Sectigo 'Tiger2027h1'",
+   "operator": "Sectigo",
+   "state": "usable"
+  },
+  "A4AqwmL24F4D+Lxve5hRMk/Xaj31t1lRdeIi+46b1fY=": {
+   "name": "Sectigo 'Tiger2027h2'",
+   "operator": "Sectigo",
+   "state": "usable"
+  },
+  "rKswcGzr7IQx9BPS9JFfER5CJEOx8qaMTzwrO6ceAsM=": {
+   "name": "Let's Encrypt 'Oak2026h2'",
+   "operator": "Let's Encrypt",
+   "state": "retired"
+  },
+  "bP5QGUOoXqkWvFLRM+TcyR7xQRx9JYQg0XOAnhgY6zo=": {
+   "name": "Let's Encrypt 'Sycamore2026h2'",
+   "operator": "Let's Encrypt",
+   "state": "usable"
+  },
+  "jspHC6zeavOiBrCkeoS3Rv4fxr+VPiXmm07kAkjzxug=": {
+   "name": "Let's Encrypt 'Sycamore2027h1'",
+   "operator": "Let's Encrypt",
+   "state": "usable"
+  },
+  "5eNiR9ku9K2jhYO1NZHbcp/C8ArktnRRdNPd/GqiU4g=": {
+   "name": "Let's Encrypt 'Sycamore2027h2'",
+   "operator": "Let's Encrypt",
+   "state": "usable"
+  },
+  "qCbL4wrGNRJGUz/gZfFPGdluGQgTxB3ZbXkAsxI8VSc=": {
+   "name": "Let's Encrypt 'Willow2026h2'",
+   "operator": "Let's Encrypt",
+   "state": "usable"
+  },
+  "ooEAGHNOF24dR+CVQPOBulRml81jqENQcW64CU7a8Q0=": {
+   "name": "Let's Encrypt 'Willow2027h1'",
+   "operator": "Let's Encrypt",
+   "state": "usable"
+  },
+  "ppWirZJtb5lujvxJAUJX2LvwRqfWJYm4jcLXh2x45S8=": {
+   "name": "Let's Encrypt 'Willow2027h2'",
+   "operator": "Let's Encrypt",
+   "state": "usable"
+  },
+  "dNudWPfUfp39eHoWKpkcGM9pjafHKZGMmhiwRQ26RLw=": {
+   "name": "TrustAsia 'log2026a'",
+   "operator": "TrustAsia",
+   "state": "usable"
+  },
+  "Jbfv3qETAZPtkweXcKoyKiZiDeNayKp8dRl94LGp4GU=": {
+   "name": "TrustAsia 'log2026b'",
+   "operator": "TrustAsia",
+   "state": "usable"
+  },
+  "7drrgVxjITRJtHvlB3kFq9DZMUfCesUUazvFjkPptsc=": {
+   "name": "TrustAsia 'HETU2027'",
+   "operator": "TrustAsia",
+   "state": "usable"
+  },
+  "VzRIzG4dLA3JS2nyh9Hv5IPHolxQxTILuzrep29usEE=": {
+   "name": "TrustAsia Luoshu2027",
+   "operator": "TrustAsia",
+   "state": "usable"
+  },
+  "LtakTeuPDIZGZ3acTt0EH4QjZ1X6OqymNNCTXfzVmnA=": {
+   "name": "Bogus placeholder log to unbreak misbehaving CT libraries",
+   "operator": "Geomys",
+   "state": "retired"
+  },
+  "Rq+GPTs+5Z+ld96oJF02sNntIqIj9GF3QSKUUu6VUF8=": {
+   "name": "Geomys 'Tuscolo2026h2'",
+   "operator": "Geomys",
+   "state": "usable"
+  },
+  "WW5sM4aUsllyolbIoOjdkEp26Ag92oc7AQg4KBQ87lk=": {
+   "name": "Geomys 'Tuscolo2027h1'",
+   "operator": "Geomys",
+   "state": "usable"
+  },
+  "1d5V7roItgyf/BjFE75qYLoARga8WVuWu0T2LMV9Ofo=": {
+   "name": "Geomys 'Tuscolo2027h2'",
+   "operator": "Geomys",
+   "state": "usable"
+  },
+  "TefD7+U3ZpoMsB44OPqv3PCMmoBWM55wK1iVm9FxiS4=": {
+   "name": "Geomys Tuscolo2028h1",
+   "operator": "Geomys",
+   "state": "qualified"
+  },
+  "A18eYQnn44YBqbhkHlfl9aePeIcnUy/PQlPx68mqDzk=": {
+   "name": "Geomys Tuscolo2028h2",
+   "operator": "Geomys",
+   "state": "qualified"
+  },
+  "yMaDuhp5vKPNGyZsbZ6MzSf0hFEMerHyV59nUhBYOgM=": {
+   "name": "Geomys Trastevere2026h2",
+   "operator": "Geomys",
+   "state": "qualified"
+  },
+  "F23RQr8KrLyBjUUTu9zDCtteWTJiU5KLmtfLdg/247k=": {
+   "name": "Geomys Trastevere2027h1",
+   "operator": "Geomys",
+   "state": "qualified"
+  },
+  "dZIIKK86Y1XymO0JfjR1dfm5hDwR4TkfV0QpnxyujO4=": {
+   "name": "Geomys Trastevere2027h2",
+   "operator": "Geomys",
+   "state": "qualified"
+  },
+  "j5ct6c9T2eqhZDHY6vWLWGZ8/QysT5c0VLGZaVHvlYc=": {
+   "name": "Geomys Trastevere2028h1",
+   "operator": "Geomys",
+   "state": "qualified"
+  },
+  "y6VZ4BSDyZ+U7N2er0ezmWM1bZ/1wShe6un50SqgTMc=": {
+   "name": "Geomys Trastevere2028h2",
+   "operator": "Geomys",
+   "state": "qualified"
+  },
+  "0vxlL6X5tzi4N1X6XrFfC0UlP06Po7m2T9TeVmLRhwg=": {
+   "name": "Bogus RFC6962 log to avoid breaking misbehaving CT libraries",
+   "operator": "IPng Networks",
+   "state": "retired"
+  },
+  "JuNkblhpISO8ND9HJDWbN5LNJFqI2BXTkzP9mRirRyM=": {
+   "name": "IPng Networks 'Halloumi2026h2a'",
+   "operator": "IPng Networks",
+   "state": "usable"
+  },
+  "ROgi/CurDpLu0On61pZkYCd20Bdg4IkFCckjobA/w38=": {
+   "name": "IPng Networks 'Halloumi2027h1'",
+   "operator": "IPng Networks",
+   "state": "usable"
+  },
+  "CRV/Yy1Gx/dtlSZUk7wPALOVrF2zorJr+wQ9ukrGOJM=": {
+   "name": "IPng Networks 'Halloumi2027h2'",
+   "operator": "IPng Networks",
+   "state": "usable"
+  },
+  "Goudaw/+v4G0eTnG0jEKhtbRAtTwRuIYLJ3jX14mJe8=": {
+   "name": "IPng Networks 'Gouda2026h2'",
+   "operator": "IPng Networks",
+   "state": "usable"
+  },
+  "Gouda43XkdHNBUnttgNV1ga2T60w23H+eI8Px8j7xLE=": {
+   "name": "IPng Networks 'Gouda2027h1'",
+   "operator": "IPng Networks",
+   "state": "usable"
+  },
+  "GoudaVNi2GSSp7niI2BuNOzp4xC6NPuTBXhdKc5XV+s=": {
+   "name": "IPng Networks 'Gouda2027h2'",
+   "operator": "IPng Networks",
+   "state": "usable"
+  },
+  "EgXQJVrBiTyuVBBwPE8Sc/yXAOErWEp/gGrcVVWAwLE=": {
+   "name": "IPng Networks Gouda2028h1",
+   "operator": "IPng Networks",
+   "state": "qualified"
+  },
+  "ANXCUqZpzf6O0sgXpi5M/O2SyHSR7pccmv3bUoh4hag=": {
+   "name": "IPng Networks Gouda2028h2",
+   "operator": "IPng Networks",
+   "state": "qualified"
+  },
+  "6+a9C+qJOkTtPzg+2/4QzZnxhphufXsmsBqEMk57934=": {
+   "name": "IPng Networks Halloumi2028h1",
+   "operator": "IPng Networks",
+   "state": "qualified"
+  },
+  "ALNWz93lJLRlXUxjZTxSUMQ04goEhRA5uv1kzlyFq2s=": {
+   "name": "IPng Networks Halloumi2028h2",
+   "operator": "IPng Networks",
+   "state": "qualified"
+  },
+  "KNPGjqGDY293g5DLHjiKzpOgTpFpnQdXNunGFtEf4Gc=": {
+   "name": "Microsec Eszigno2026h2",
+   "operator": "Microsec",
+   "state": "qualified"
+  },
+  "eBAmYgxXrnCeBgs/iwSfqrh6aXhhDP+YpDWqAgNwe9k=": {
+   "name": "Microsec Eszigno2027h1",
+   "operator": "Microsec",
+   "state": "qualified"
+  },
+  "GrnppF/Ct4QLH+fciv7lRpXau5p8I9NfpTclu4k6md0=": {
+   "name": "Microsec Eszigno2027h2",
+   "operator": "Microsec",
+   "state": "qualified"
+  },
+  "bdyd6YsZgQp1oXcR+tZVoOVbdYzpKkXZg27d9PznIBM=": {
+   "name": "Microsec Eszigno2028h1",
+   "operator": "Microsec",
+   "state": "qualified"
+  },
+  "2iKjSO8buzFuV+ARSkqcdAe1DxOmJTk9JtLe4joj4hY=": {
+   "name": "Microsec Eszigno2028h2",
+   "operator": "Microsec",
+   "state": "qualified"
+  },
+  "6jAGlJ1CunsD2FCB4yYsua5xil5vUDT3ePE4BU6CdFw=": {
+   "name": "GoDaddy Aquamarine2026h2",
+   "operator": "GoDaddy",
+   "state": "qualified"
+  },
+  "/cLoBbiE8/CzcwbEliJzk9OExUIiB/1Aj+4CBc6jVhY=": {
+   "name": "GoDaddy Aquamarine2027h1",
+   "operator": "GoDaddy",
+   "state": "qualified"
+  },
+  "8LDBho1KJqIqj/7ghUOplCvvi7u69tYBqyHdvnFJ/68=": {
+   "name": "GoDaddy Aquamarine2027h2",
+   "operator": "GoDaddy",
+   "state": "qualified"
+  },
+  "Nh2PNG9+2gYj4hlfNqqVGKiHKCEzvpzppruUJGPrTaY=": {
+   "name": "GoDaddy Aquamarine2028h1",
+   "operator": "GoDaddy",
+   "state": "qualified"
+  },
+  "/jwyxS3R1tXbsRUdYe6iH5EhBfIZa1UNh/as89aPnFM=": {
+   "name": "GoDaddy Aquamarine2028h2",
+   "operator": "GoDaddy",
+   "state": "qualified"
+  }
+ }
+}
