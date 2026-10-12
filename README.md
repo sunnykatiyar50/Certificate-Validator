@@ -183,15 +183,20 @@ The version lives in one place: `package.json`. It is shown in the app footer an
 
 To publish a new version:
 
-1. Merge your changes to `main` and update your local copy (`git checkout main && git pull`). The working tree must be clean.
-2. Bump the version, commit and tag it:
+1. Merge your changes to `main` and update your local copy:
    ```bash
-   node scripts/release.js patch    # or minor / major / x.y.z. Use --show to print the current version.
+   git checkout main
+   git pull
    ```
-3. Push the commit and the tag the script prints:
+2. Release. The script bumps the version, commits, tags, and publishes the commit and the tag in one atomic push:
    ```bash
-   git push origin main vX.Y.Z
+   node scripts/release.js patch --push    # or minor / major / x.y.z. Use --show to print the current version.
    ```
+   Without `--push` it stops after tagging and prints the command to run yourself: `git push --atomic origin main vX.Y.Z`.
+
+The script refuses to release unless you are on `main`, the working tree is clean, `main` is exactly level with `origin/main` (not behind or ahead), and the tag does not already exist locally or on GitHub. That keeps a stale checkout from publishing an old build under a new version number. Always push the commit and the tag together (`--atomic`): pushed separately, git can reject the branch yet still publish the tag.
+
+The workflow also checks that a release tag is on `main` and fails before building if it is not. If that happens, update `main`, delete the tag (`git push origin :refs/tags/vX.Y.Z && git tag -d vX.Y.Z`) and release again.
 
 The GitHub Actions workflow (`.github/workflows/docker.yml`) runs the tests, then builds the image:
 
