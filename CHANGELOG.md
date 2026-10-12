@@ -6,6 +6,8 @@ Add your notes under **Unreleased** as you work. `node scripts/release.js` moves
 
 ## Unreleased
 
+## 2.4.0 - 2026-10-12
+
 ### Added
 - **My CAs:** upload a CA you already have, or keep one you create, and choose it from a list wherever a CA is needed. Keep it in this browser only, on the server (key encrypted, visible only to you), or not at all.
 - **Issue Certificate:** make a new private key and a certificate from a saved CA in one step, with no CSR.
